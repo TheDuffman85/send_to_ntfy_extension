@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --button-bg-color: #e0e0e0;
+      --button-text-color: #000000;
+      --border-color: #cccccc;
+      --icon-color: #ffffff; /* This should match the color of the cog icon */
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-color: #1e1e1e;
+        --text-color: #ffffff;
+        --button-bg-color: #333333;
+        --button-text-color: #ffffff;
+        --border-color: #444444;
+        --icon-color: #ffffff; /* This should match the color of the cog icon in dark mode */
+      }
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      width: 240px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    .container {
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    button {
+      flex: 1;
+      margin-right: 10px;
+      background-color: var(--button-bg-color);
+      color: var(--button-text-color);
+      border: 1px solid var(--border-color);
+      padding: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.8;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .settings, .open-url {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .open-url {
+      margin-right: 10px; /* Add a gap between the open URL icon and the cog */
+    }
+
+    .form-container {
+      padding: 10px;
+    }
+
+    .form-container label {
+      display: block;
+      margin-top: 10px;
+    }
+
+    .form-container input, .form-container textarea, .form-container select {
+      width: 100%;
+      padding: 5px;
+      margin-top: 5px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      box-sizing: border-box;
+    }
+
+    #status, #warning {
+      margin: 10px 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <textarea id="message" rows="4"></textarea>
+    <select id="topic-select"></select>
+  </div>
+  <div class="container">
+    <button id="send">Send to ntfy</button>    
+	<span class="open-url" title="Open ntfy URL">&#128279;</span>
+    <span class="settings">&#9881;</span>
+  </div>
+  <div id="warning" class="hidden">Please configure ntfy settings first.</div>
+  <div id="status"></div>
+  <div id="settings" class="hidden form-container">
+    <label for="url">ntfy URL:</label>
+    <input type="text" id="url">
+    <label for="token">Token (optional):</label>
+    <input type="password" id="token">
+    <label for="topics">Topics (comma separated):</label>
+    <input type="text" id="topics">
+    <div style="margin-top: 10px;">
+      <button id="save">Save Configuration</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
