@@ -100,22 +100,22 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => { warning.classList.add('hidden'); }, 3000);
         return;
       }
-	  
-	    const urlObj = new URL(apiUrl);
+    
+      const urlObj = new URL(apiUrl);
       const username = urlObj.username;
       const password = urlObj.password;
-	  
+    
       // Remove username and password from url
       urlObj.username = '';
       urlObj.password = '';
-	
+  
       const fullUrl = urlObj.toString() + topic;
-	  
+    
       const headers = new Headers();
-	    if(username && password) {
-	      const credentials = btoa(`${username}:${password}`);
-		    headers.set('Authorization', `Basic ${credentials}`);
-	    }
+      if(username && password) {
+        const credentials = btoa(`${username}:${password}`);
+        headers.set('Authorization', `Basic ${credentials}`);
+      }
       if (accessToken) {
         headers.set('Authorization', `Bearer ${accessToken}`);
       }
