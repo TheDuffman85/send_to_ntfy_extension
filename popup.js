@@ -100,12 +100,24 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => { warning.classList.add('hidden'); }, 3000);
         return;
       }
-
-      const fullUrl = apiUrl + '/' + topic;
-
+    
+      const urlObj = new URL(apiUrl);
+      const username = urlObj.username;
+      const password = urlObj.password;
+    
+      // Remove username and password from url
+      urlObj.username = '';
+      urlObj.password = '';
+  
+      const fullUrl = urlObj.toString() + topic;
+    
       const headers = new Headers();
+      if(username && password) {
+        const credentials = btoa(`${username}:${password}`);
+        headers.set('Authorization', `Basic ${credentials}`);
+      }
       if (accessToken) {
-        headers.set('Authorization', 'Bearer ' + accessToken);
+        headers.set('Authorization', `Bearer ${accessToken}`);
       }
 
       fetch(fullUrl, {
@@ -114,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
         body: message
       }).then(response => {
         if (!response.ok) {
-          console.error("Failed to send message:", response);
+          console.error(`Failed to send message: ${response.status}`);
           status.textContent = "Failed to send message.";
           status.style.color = 'red';
         } else {
