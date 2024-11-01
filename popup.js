@@ -1,144 +1,199 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
   const status = document.getElementById('status');
   const warning = document.getElementById('warning');
   const topicSelect = document.getElementById('topic-select');
+  const allStorageItems = ['topics', 'apiUrl', 'accessToken', 'prefillEnabled'];
 
-  // Load saved configuration
-  chrome.storage.sync.get(['topics', 'apiUrl', 'accessToken'], function(items) {
-    if (chrome.runtime.lastError) {
-      console.error('Error retrieving settings:', chrome.runtime.lastError);
-    } else {
-      const topics = items.topics ? items.topics.split(',') : [];
-      document.getElementById('url').value = items.apiUrl || '';
-      document.getElementById('token').value = items.accessToken || '';
-      document.getElementById('topics').value = topics.join(',');
+  let config = {
+    topics: [],
+    apiUrl: '',
+    accessToken: '',
+    prefillEnabled: true,
+    pageUrl: ''
+  };
 
-      // Populate the topic dropdown
-      topicSelect.innerHTML = '';
-      topics.forEach(topic => {
-        const option = document.createElement('option');
-        option.value = topic.trim();
-        option.textContent = topic.trim();
-        topicSelect.appendChild(option);
-      });
+  // Initialize the extension on load
+  init();
+
+  // Initializes the extension by loading the configuration and adding event listeners.
+  function init() {
+    loadConfig();
+    addEventListeners();
+  }
+
+  // Loads the configuration from Chrome storage and applies settings to the UI.
+  async function loadConfig() {
+    try {
+      const items = await getConfigs(allStorageItems);
+      config.pageUrl = await getPageUrl();
+      config = {
+        ...config,
+        topics: items.topics ? items.topics.split(',') : [],
+        apiUrl: items.apiUrl || '',
+        accessToken: items.accessToken || '',
+        prefillEnabled: !!items.prefillEnabled
+      };
+      
+      updateUI();
+    } catch (error) {
+      console.error('Error retrieving settings:', error);
     }
-  });
+  }
 
-  // Toggle settings visibility
-  document.querySelector('.settings').addEventListener('click', function() {
-    const settingsDiv = document.getElementById('settings');
-    settingsDiv.classList.toggle('hidden');
-  });
+  // Adds necessary event listeners for UI interactions.
+  function addEventListeners() {
+    document.querySelector('.settings').addEventListener('click', () => toggleVisibility('settings'));
+    document.getElementById('save').addEventListener('click', saveConfig);
+    document.querySelector('.open-url').addEventListener('click', openNtfyUrl);
+    document.getElementById('send').addEventListener('click', sendMessage);
+  }
 
-  // Save configuration
-  document.getElementById('save').addEventListener('click', function() {
-    const topics = document.getElementById('topics').value;
-    const apiUrl = document.getElementById('url').value;
-    const accessToken = document.getElementById('token').value;
+  // Configuration Management
 
-    chrome.storage.sync.set({ topics, apiUrl, accessToken }, function() {
-      if (chrome.runtime.lastError) {
-        console.error('Error saving settings:', chrome.runtime.lastError);
-        status.textContent = 'Error saving configuration.';
-        status.style.color = 'red';
-      } else {
-        console.log('Configuration saved.');
-        status.textContent = 'Configuration saved.';
-        status.style.color = 'green';
-        setTimeout(() => { status.textContent = ''; }, 3000);
+  // Retrieves configuration items from Chrome storage.
+  async function getConfigs(storageItems) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.sync.get(storageItems, items => chrome.runtime.lastError ? reject(chrome.runtime.lastError) : resolve(items));
+    });
+  }
 
-        // Update the topic dropdown
-        const topicsArray = topics ? topics.split(',') : [];
-        topicSelect.innerHTML = '';
-        topicsArray.forEach(topic => {
-          const option = document.createElement('option');
-          option.value = topic.trim();
-          option.textContent = topic.trim();
-          topicSelect.appendChild(option);
+  // Saves the updated configuration to Chrome storage and updates the UI.
+  async function saveConfig() {
+    const updatedConfig = {
+      topics: document.getElementById('topics').value,
+      apiUrl: document.getElementById('url').value,
+      accessToken: document.getElementById('token').value,
+      prefillEnabled: document.getElementById('prefill').checked,
+    };
+
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.storage.sync.set(updatedConfig, () => {
+          chrome.runtime.lastError ? reject(chrome.runtime.lastError) : resolve();
         });
-      }
-    });
-  });
-
-  // Open ntfy URL in new tab
-  document.querySelector('.open-url').addEventListener('click', function() {
-    chrome.storage.sync.get('apiUrl', function(items) {
-      const apiUrl = items.apiUrl;
-      if (apiUrl) {
-        chrome.tabs.create({ url: apiUrl });
-      } else {
-        warning.textContent = 'Please configure ntfy URL first.';
-        warning.style.color = 'red';
-        warning.classList.remove('hidden');
-        setTimeout(() => { warning.classList.add('hidden'); }, 3000);
-      }
-    });
-  });
-
-  // Prefill the message textarea with the current tab's URL
-  chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-    const url = tabs[0].url;
-    document.getElementById('message').value = url;
-  });
-
-  // Send current URL or edited message to ntfy
-  document.getElementById('send').addEventListener('click', function() {
-    chrome.storage.sync.get(['topics', 'apiUrl', 'accessToken'], function(items) {
-      if (chrome.runtime.lastError) {
-        console.error('Error retrieving settings:', chrome.runtime.lastError);
-        return;
-      }
-
-      const topic = topicSelect.value;
-      const apiUrl = items.apiUrl;
-      const accessToken = items.accessToken;
-      const message = document.getElementById('message').value;
-
-      if (!topic || !apiUrl) {
-        warning.classList.remove('hidden');
-        warning.style.color = 'red';
-        setTimeout(() => { warning.classList.add('hidden'); }, 3000);
-        return;
-      }
-    
-      const urlObj = new URL(apiUrl);
-      const username = urlObj.username;
-      const password = urlObj.password;
-    
-      // Remove username and password from url
-      urlObj.username = '';
-      urlObj.password = '';
-  
-      const fullUrl = urlObj.toString() + topic;
-    
-      const headers = new Headers();
-      if(username && password) {
-        const credentials = btoa(`${username}:${password}`);
-        headers.set('Authorization', `Basic ${credentials}`);
-      }
-      if (accessToken) {
-        headers.set('Authorization', `Bearer ${accessToken}`);
-      }
-
-      fetch(fullUrl, {
-        method: "POST",
-        headers: headers,
-        body: message
-      }).then(response => {
-        if (!response.ok) {
-          console.error(`Failed to send message: ${response.status}`);
-          status.textContent = "Failed to send message.";
-          status.style.color = 'red';
-        } else {
-          status.textContent = "Message sent successfully.";
-          status.style.color = 'green';
-          setTimeout(() => { status.textContent = ''; }, 3000);
-        }
-      }).catch(error => {
-        console.error("Error:", error);
-        status.textContent = "Error: " + error;
-        status.style.color = 'red';
       });
+
+      config = { ...config, ...updatedConfig, topics: updatedConfig.topics.split(',') };
+      showStatus('Configuration saved.', 'green');
+      updateTopicDropdown();
+      prefillMessage();
+    } catch (error) {
+      showStatus('Error saving configuration.', 'red');
+    }
+  }
+
+  // Styling and UI Functions
+
+  // Updates UI elements with loaded configuration values.
+  function updateUI() {
+    setElementValue('url', config.apiUrl);
+    setElementValue('token', config.accessToken);
+    setElementValue('topics', config.topics.join(','));
+    setElementChecked('prefill', config.prefillEnabled);
+    updateTopicDropdown();
+    prefillMessage();
+  }
+
+  // Shows a temporary status message to the user.
+  function showStatus(message, color) {
+    status.textContent = message;
+    status.style.color = color;
+    setTimeout(() => (status.textContent = ''), 3000);
+  }
+
+  // Shows a temporary warning message.
+  function showWarning(message) {
+    warning.textContent = message;
+    warning.style.color = 'red';
+    warning.classList.remove('hidden');
+    setTimeout(() => warning.classList.add('hidden'), 3000);
+  }
+
+  // Sets a text input field's value by element ID.
+  function setElementValue(id, value) {
+    document.getElementById(id).value = value || '';
+  }
+
+  // Sets a checkbox's checked state by element ID.
+  function setElementChecked(id, value) {
+    document.getElementById(id).checked = !!value;
+  }
+
+  // Updates the dropdown menu with the topics from the configuration.
+  function updateTopicDropdown() {
+    topicSelect.innerHTML = '';
+    config.topics.forEach(topic => {
+      const option = document.createElement('option');
+      option.value = topic.trim();
+      option.textContent = topic.trim();
+      topicSelect.appendChild(option);
     });
-  });
+  }
+
+  // Prefills the message input with the current page URL if enabled.
+  function prefillMessage() {
+    const message = document.getElementById('message');
+    const urlMessage = `${config.pageUrl}\n`;
+    message.value = config.prefillEnabled
+      ? urlMessage + message.value.replace(urlMessage, '')
+      : message.value.replace(urlMessage, '');
+  }
+
+  // Toggles visibility of an element by ID.
+  function toggleVisibility(id) {
+    document.getElementById(id).classList.toggle('hidden');
+  }
+
+  // URL and Messaging Functions
+
+  // Gets the URL of the current active tab.
+  async function getPageUrl() {
+    return new Promise((resolve, reject) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, tabs => 
+        chrome.runtime.lastError 
+          ? reject(chrome.runtime.lastError)
+          : resolve(tabs[0].url));
+    });
+  }
+
+  // Opens the configured API URL in a new tab, or shows a warning if not set.
+  function openNtfyUrl() {
+    if (config.apiUrl) {
+      chrome.tabs.create({ url: config.apiUrl });
+    } else {
+      showWarning('Please configure ntfy URL first.');
+    }
+  }
+
+  // Sends a message to the configured API endpoint.
+  function sendMessage() {
+    const { fullUrl, headers, message } = createRequest();
+    if (!fullUrl) return;
+
+    fetch(fullUrl, { method: 'POST', headers, body: message })
+      .then(response => response.ok 
+        ? showStatus('Message sent successfully.', 'green') 
+        : showStatus('Failed to send message.', 'red'))
+      .catch(error => showStatus(`Error: ${error}`, 'red'));
+  }
+
+  // Prepares the request URL, headers, and body for sending a message.
+  function createRequest() {
+    if (!topicSelect.value || !config.apiUrl) {
+      showWarning('Please configure topics and API URL.');
+      return {};
+    }
+
+    const urlObj = new URL(config.apiUrl);
+    const headers = new Headers();
+
+    if (urlObj.username && urlObj.password) {
+      headers.set('Authorization', `Basic ${btoa(`${urlObj.username}:${urlObj.password}`)}`);
+    }
+    if (config.accessToken) {
+      headers.set('Authorization', `Bearer ${config.accessToken}`);
+    }
+
+    return { fullUrl: `${urlObj.origin}/${topicSelect.value}`, headers, message: document.getElementById('message').value };
+  }
 });
