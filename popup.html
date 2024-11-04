@@ -89,6 +89,13 @@
       margin: 10px 0;
       text-align: center;
     }
+
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      white-space: nowrap; /* Prevent text from wrapping */
+      margin-top: 5px;
+    }
   </style>
 </head>
 <body>
@@ -97,9 +104,9 @@
     <select id="topic-select"></select>
   </div>
   <div class="container">
-    <button id="send">Send to ntfy</button>    
-	<span class="open-url" title="Open ntfy URL">&#128279;</span>
-    <span class="settings">&#9881;</span>
+    <button id="send">Send to ntfy</button>
+    <span class="open-url" title="Open ntfy URL">&#128279;</span>
+    <span class="settings" id="settings-icon" title="Settings">&#9881;</span>
   </div>
   <div id="warning" class="hidden">Please configure ntfy settings first.</div>
   <div id="status"></div>
@@ -110,6 +117,10 @@
     <input type="password" id="token">
     <label for="topics">Topics (comma separated):</label>
     <input type="text" id="topics">
+    <div class="checkbox-container">
+      <label for="prefill">Enable Prefill with URL:</label>
+      <input type="checkbox" id="prefill">
+    </div>
     <div style="margin-top: 10px;">
       <button id="save">Save Configuration</button>
     </div>
