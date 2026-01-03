@@ -1,19 +1,56 @@
-# Description
+# Send to ntfy
+
 [![Build Extension](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml/badge.svg)](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml)
-Simple browser extenstion to send urls or text to ntfy
 
-# Features 
- - Send the current url or text to preconfigured topics
- - Optional authentication via token
- - Change ntfy server
- - Supports Manifest V3
+A simple yet powerful browser extension to send the current URL or custom text to [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
 
-# Browser Stores
-[![Firefox](https://github.com/TheDuffman85/send_to_ntfy_extension/assets/9296618/1219eda6-e480-4859-855c-730e8027379e)](https://addons.mozilla.org/de/firefox/addon/send-to-ntfy/)
+## Features
 
-[![Chrome](https://github.com/TheDuffman85/send_to_ntfy_extension/assets/9296618/48fa46f9-b210-40bf-92ef-e6797b38bdcc)](https://chromewebstore.google.com/detail/send-to-ntfy/kfiegffaamihidajjcingmognibehdlb)
+- **File Upload**: Easily upload and send files to your ntfy topics.
+- **Quick Sharing**: Send the current page URL or custom text to your ntfy topics.
+- **Custom Configuration**: Support for self-hosted ntfy servers.
+- **Authentication**: Optional support for token-based authentication.
+- **Privacy First**: No tracking, just simple functionality.
+- **Modern UI**: Clean interface with Dark Mode support.
+- **Cross-Browser**: Supports Chrome, Firefox, and Edge (Manifest V3).
 
-[![Edge](https://github.com/TheDuffman85/send_to_ntfy_extension/assets/9296618/8389d2f8-39c1-4a42-9d6f-1af0f49277e3)](https://microsoftedge.microsoft.com/addons/detail/send-to-ntfy/nlcjgpmaicbjkjdicgiaighhlihfhafj)
+## Installation
 
-# Screenshot
-![grafik](https://github.com/TheDuffman85/send_to_ntfy_extension/assets/9296618/a87f1c2b-b7d4-4d5a-8f38-60436871abe6)
+### Official Stores
+
+| Browser | Store Link |
+| :--- | :--- |
+| **Firefox** | [![Firefox Add-on](https://img.shields.io/badge/Firefox-Available-238636?style=flat-square&logo=firefox-browser&logoColor=white)](https://addons.mozilla.org/de/firefox/addon/send-to-ntfy/) |
+| **Chrome** | [![Chrome Web Store](https://img.shields.io/badge/Chrome-Available-238636?style=flat-square&logo=google-chrome&logoColor=white)](https://chromewebstore.google.com/detail/send-to-ntfy/kfiegffaamihidajjcingmognibehdlb) |
+| **Edge** | [![Microsoft Edge Add-ons](https://img.shields.io/badge/Edge-Available-238636?style=flat-square&logo=microsoft-edge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/send-to-ntfy/nlcjgpmaicbjkjdicgiaighhlihfhafj) |
+
+### Manual Installation
+1. Download the latest release from the [Releases page](https://github.com/TheDuffman85/send_to_ntfy_extension/releases).
+2. Unzip the file.
+3. Load the unpacked extension in your browser's developer mode.
+
+## Configuration & Usage
+
+Access the extension settings to configure your preferences:
+
+1. **ntfy Server**: Default is `https://ntfy.sh`, but you can change this to your self-hosted instance.
+2. **Topic**: Set your default target topic.
+3. **Authentication**: If your server requires it, enter your Access Token.
+4. **Priorities**: Choose a default priority level or adjust it per message.
+5. **Tags**: Add tags to your notifications for better organization.
+
+## Development
+
+To build the extension locally:
+
+```bash
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+```
+
+## Preview
+
+![Screenshot](https://github.com/TheDuffman85/send_to_ntfy_extension/assets/9296618/a87f1c2b-b7d4-4d5a-8f38-60436871abe6)

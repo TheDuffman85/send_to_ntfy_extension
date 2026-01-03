@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Header
     backBtn: document.getElementById('back-btn'),
     headerText: document.getElementById('header-text'),
-    // openUrlBtn: document.getElementById('open-url-btn'), // Removed
+    openUrlBtn: document.getElementById('open-url-btn'),
     settingsBtn: document.getElementById('settings-btn'),
 
     // Main form
@@ -423,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Open ntfy URL
-    // elements.openUrlBtn.addEventListener('click', openNtfyUrl); // Removed
+    elements.openUrlBtn.addEventListener('click', openNtfyUrl);
 
     // Send message
     elements.sendBtn.addEventListener('click', sendNotification);
@@ -470,7 +470,9 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.mainView.classList.remove('active');
     elements.settingsView.classList.add('active');
     elements.backBtn.classList.add('visible');
+    elements.backBtn.classList.add('visible');
     elements.settingsBtn.style.display = 'none';
+    elements.openUrlBtn.style.display = 'none';
     elements.headerText.textContent = 'Settings';
     isSettingsView = true;
   }
@@ -480,8 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.mainView.classList.add('active');
     elements.backBtn.classList.remove('visible');
     elements.settingsBtn.style.display = '';
-    elements.headerText.textContent = 'Send to ntfy';
-    elements.settingsBtn.style.display = '';
+    elements.openUrlBtn.style.display = '';
     elements.headerText.textContent = 'Send to ntfy';
     isSettingsView = false;
 
@@ -501,7 +502,8 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.settingsBtn.classList.toggle('highlight', !isConfigured);
 
     // Enable/disable the open URL button based on configuration
-    // elements.openUrlBtn.disabled = !config.apiUrl; // Removed
+    // Enable/disable the open URL button based on configuration
+    elements.openUrlBtn.disabled = !config.apiUrl;
 
     // Update topic dropdown
     if (!isConfigured) {
@@ -699,11 +701,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Open ntfy URL
   // ==================
 
-  // function openNtfyUrl() {
-  //   if (config.apiUrl) {
-  //     chrome.tabs.create({ url: config.apiUrl });
-  //   }
-  // }
+  function openNtfyUrl() {
+    if (config.apiUrl) {
+      chrome.tabs.create({ url: config.apiUrl });
+    }
+  }
 
   // ==================
   // Send Notification
