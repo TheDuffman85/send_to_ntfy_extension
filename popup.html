@@ -23,7 +23,7 @@
     }
 
     /* Dark theme - matching NTFY.sh web UI */
-    [data-theme="dark"] {
+    body[data-theme="dark"] {
       --bg-main: #1a1f1e;
       --bg-card: #1a1f1e;
       --bg-input: #252b2a;
@@ -36,7 +36,7 @@
 
     /* Auto theme (system preference) */
     @media (prefers-color-scheme: dark) {
-      [data-theme="auto"] {
+      body[data-theme="auto"] {
         --bg-main: #1a1f1e;
         --bg-card: #1a1f1e;
         --bg-input: #252b2a;
@@ -394,12 +394,12 @@
     /* Chips (Priority & Theme) */
     .chips {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       flex-wrap: wrap;
     }
 
     .chip {
-      padding: 6px 12px;
+      padding: 6px 8px;
       font-size: 12px;
       font-weight: 500;
       border: 1px solid var(--border-color);
@@ -553,6 +553,18 @@
       background-color: var(--border-color);
       margin: 10px 0;
     }
+
+    /* Priority Icons */
+    .p-icon {
+      margin-right: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .chip.active .p-icon {
+      color: inherit;
+      /* White when active */
+    }
   </style>
 </head>
 
@@ -560,14 +572,13 @@
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <button class="back-btn" id="back-btn" title="Back">←</button>
       <div class="header-title">
         <img src="icons/icon48.png" alt="ntfy" style="width: 20px; height: 20px;">
         <span id="header-text">Send to ntfy</span>
       </div>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="open-url-btn" title="Open ntfy" disabled>🔗</button>
+      <button class="back-btn" id="back-btn" title="Back">←</button>
       <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
     </div>
   </div>
@@ -623,11 +634,11 @@
         <div class="form-group">
           <label class="form-label">Priority</label>
           <div class="chips" id="priority-chips">
-            <button class="chip" data-priority="1">Min</button>
-            <button class="chip" data-priority="2">Low</button>
+            <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
+            <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
             <button class="chip active" data-priority="3">Default</button>
-            <button class="chip" data-priority="4">High</button>
-            <button class="chip" data-priority="5">Urgent</button>
+            <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
+            <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
           </div>
         </div>
 
@@ -690,10 +701,8 @@
 
       <div class="divider"></div>
 
-      <div class="section-title">Appearance</div>
-
       <div class="form-group">
-        <label class="form-label">Theme</label>
+        <label class="form-label">Appearance</label>
         <div class="chips" id="theme-chips">
           <button class="chip" data-theme="light">☀️ Light</button>
           <button class="chip" data-theme="dark">🌙 Dark</button>

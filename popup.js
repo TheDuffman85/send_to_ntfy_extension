@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Header
     backBtn: document.getElementById('back-btn'),
     headerText: document.getElementById('header-text'),
-    openUrlBtn: document.getElementById('open-url-btn'),
+    // openUrlBtn: document.getElementById('open-url-btn'), // Removed
     settingsBtn: document.getElementById('settings-btn'),
 
     // Main form
@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedPriority = 3;
   let isSettingsView = false;
 
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'prefillEnabled', 'theme', 'priority', 'lastTags'];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'prefillEnabled', 'theme', 'priority', 'lastTags', 'lastTopic'];
 
   // Initialize
   init();
@@ -108,6 +108,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (items.priority) {
         selectedPriority = items.priority;
+      }
+
+      if (items.lastTopic && config.topics.includes(items.lastTopic)) {
+        config.lastTopic = items.lastTopic;
       }
 
       if (items.lastTags) {
@@ -419,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Open ntfy URL
-    elements.openUrlBtn.addEventListener('click', openNtfyUrl);
+    // elements.openUrlBtn.addEventListener('click', openNtfyUrl); // Removed
 
     // Send message
     elements.sendBtn.addEventListener('click', sendNotification);
@@ -497,13 +501,16 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.settingsBtn.classList.toggle('highlight', !isConfigured);
 
     // Enable/disable the open URL button based on configuration
-    elements.openUrlBtn.disabled = !config.apiUrl;
+    // elements.openUrlBtn.disabled = !config.apiUrl; // Removed
 
     // Update topic dropdown
     if (!isConfigured) {
       elements.topicSelect.innerHTML = '<option disabled>No topics configured</option>';
     } else {
       updateTopicDropdown();
+      if (config.lastTopic) {
+        elements.topicSelect.value = config.lastTopic;
+      }
     }
 
     prefillMessage();
@@ -692,11 +699,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Open ntfy URL
   // ==================
 
-  function openNtfyUrl() {
-    if (config.apiUrl) {
-      chrome.tabs.create({ url: config.apiUrl });
-    }
-  }
+  // function openNtfyUrl() {
+  //   if (config.apiUrl) {
+  //     chrome.tabs.create({ url: config.apiUrl });
+  //   }
+  // }
 
   // ==================
   // Send Notification
@@ -790,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // renderTags();
 
         // Persist tags as last used
-        await saveToStorage({ lastTags: [...tags] });
+        await saveToStorage({ lastTags: [...tags], lastTopic: topic });
 
         await removeFile();
         // Clear any saved draft state so it doesn't overwrite preferences next time

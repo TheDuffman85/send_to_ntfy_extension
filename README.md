@@ -1,4 +1,5 @@
 # Description
+[![Build Extension](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml/badge.svg)](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml)
 Simple browser extenstion to send urls or text to ntfy
 
 # Features 
