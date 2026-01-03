@@ -1,0 +1,92 @@
+name: Build Extension
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from manifest
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      # ==================
+      # Chrome / Edge Build
+      # ==================
+      - name: Build Chrome/Edge extension
+        run: |
+          mkdir -p build/chrome
+          
+          # Copy all extension files
+          cp -r icons build/chrome/
+          cp popup.html popup.js options.html options.js service_worker.js build/chrome/
+          
+          # Create Chrome-specific manifest (remove Firefox-specific settings)
+          jq 'del(.browser_specific_settings)' manifest.json > build/chrome/manifest.json
+          
+          # Create ZIP for Chrome Web Store / Edge Add-ons
+          cd build/chrome
+          zip -r ../send-to-ntfy-chrome-v${{ steps.version.outputs.version }}.zip .
+
+      # ==================
+      # Firefox Build
+      # ==================
+      - name: Build Firefox extension
+        run: |
+          mkdir -p build/firefox
+          
+          # Copy all extension files
+          cp -r icons build/firefox/
+          cp popup.html popup.js options.html options.js service_worker.js build/firefox/
+          
+          # Firefox uses the manifest as-is (includes browser_specific_settings)
+          cp manifest.json build/firefox/
+          
+          # Create XPI for Firefox (it's just a ZIP with .xpi extension)
+          cd build/firefox
+          zip -r ../send-to-ntfy-firefox-v${{ steps.version.outputs.version }}.xpi .
+
+      # ==================
+      # Upload Artifacts
+      # ==================
+      - name: Upload Chrome/Edge extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-edge-extension
+          path: build/send-to-ntfy-chrome-v${{ steps.version.outputs.version }}.zip
+
+      - name: Upload Firefox extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefox-extension
+          path: build/send-to-ntfy-firefox-v${{ steps.version.outputs.version }}.xpi
+
+      # ==================
+      # Create Release (on tag push)
+      # ==================
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/send-to-ntfy-chrome-v${{ steps.version.outputs.version }}.zip
+            build/send-to-ntfy-firefox-v${{ steps.version.outputs.version }}.xpi
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Send to ntfy",
-  "version": "1.2",
-  "description": "Send to ntfy",
+  "version": "2.0",
+  "description": "Send notifications to ntfy.sh with file attachments, priority, and tags",
   "permissions": [
     "activeTab",
     "storage"
@@ -11,10 +11,6 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  },
-  "background": {
-    "service_worker": "service_worker.js",
-	"scripts": ["service_worker.js"]
   },
   "browser_specific_settings": {
     "gecko": {
@@ -28,6 +24,5 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  },
-  "content_security_policy": {}
+  }
 }

@@ -1,130 +1,712 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=350">
   <style>
     :root {
-      --bg-color: #ffffff;
-      --text-color: #000000;
-      --button-bg-color: #e0e0e0;
-      --button-text-color: #000000;
-      --border-color: #cccccc;
-      --icon-color: #ffffff; /* This should match the color of the cog icon */
+      /* NTFY.sh inspired color palette */
+      --primary: #338574;
+      --primary-dark: #2a6e60;
+      --primary-light: #4a9d8c;
+
+      /* Light theme */
+      --bg-main: #f5f5f5;
+      --bg-card: #ffffff;
+      --bg-input: #ffffff;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666666;
+      --border-color: #e0e0e0;
+      --border-focus: #338574;
+      --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
+    /* Dark theme - matching NTFY.sh web UI */
+    [data-theme="dark"] {
+      --bg-main: #1a1f1e;
+      --bg-card: #1a1f1e;
+      --bg-input: #252b2a;
+      --text-primary: #e8e8e8;
+      --text-secondary: #9e9e9e;
+      --border-color: #3a4240;
+      --border-focus: #4a9d8c;
+      --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Auto theme (system preference) */
     @media (prefers-color-scheme: dark) {
-      :root {
-        --bg-color: #1e1e1e;
-        --text-color: #ffffff;
-        --button-bg-color: #333333;
-        --button-text-color: #ffffff;
-        --border-color: #444444;
-        --icon-color: #ffffff; /* This should match the color of the cog icon in dark mode */
+      [data-theme="auto"] {
+        --bg-main: #1a1f1e;
+        --bg-card: #1a1f1e;
+        --bg-input: #252b2a;
+        --text-primary: #e8e8e8;
+        --text-secondary: #9e9e9e;
+        --border-color: #3a4240;
+        --border-focus: #4a9d8c;
+        --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
       }
     }
 
-    body {
-      font-family: Arial, sans-serif;
+    * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      width: 240px;
-      background-color: var(--bg-color);
-      color: var(--text-color);
     }
 
-    .container {
-      padding: 10px;
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      width: 350px;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #338574 0%, #2a6e60 100%);
+      padding: 12px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
-    button {
-      flex: 1;
-      margin-right: 10px;
-      background-color: var(--button-bg-color);
-      color: var(--button-text-color);
-      border: 1px solid var(--border-color);
-      padding: 5px;
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-title {
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .back-btn.visible {
+      display: flex;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .back-btn,
+    .icon-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      width: 32px;
+      height: 32px;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 18px;
+      /* Slightly larger for visibility */
+      box-shadow: none;
     }
 
-    button:hover {
-      opacity: 0.8;
+    .back-btn:hover,
+    .icon-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.15);
+      transform: none;
+      box-shadow: none;
+      color: white;
     }
 
-    .hidden {
+    .back-btn:active,
+    .icon-btn:active:not(:disabled) {
+      background: rgba(255, 255, 255, 0.25);
+      transform: none;
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: transparent;
+      color: white;
+      box-shadow: none;
+    }
+
+    /* Highlighted settings button when not configured */
+    .icon-btn.highlight {
+      background: white;
+      color: var(--primary);
+      border-color: white;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .icon-btn.highlight:hover {
+      background: #f0f0f0;
+    }
+
+    /* Specific styles for back button visibility */
+    .back-btn {
+      display: none;
+      font-size: 18px;
+    }
+
+    .back-btn.visible {
+      display: flex;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(255, 255, 255, 0);
+      }
+    }
+
+    /* View containers */
+    .view {
       display: none;
     }
 
-    .settings, .open-url {
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-    }
-
-    .open-url {
-      margin-right: 10px; /* Add a gap between the open URL icon and the cog */
-    }
-
-    .form-container {
-      padding: 10px;
-    }
-
-    .form-container label {
+    .view.active {
       display: block;
-      margin-top: 10px;
     }
 
-    .form-container input, .form-container textarea, .form-container select {
+    /* Main Content */
+    .main-content {
+      padding: 16px;
+      padding-bottom: 16px;
+      min-height: auto;
+    }
+
+    /* Disabled/unconfigured state */
+    .main-content.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 10px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea {
       width: 100%;
-      padding: 5px;
-      margin-top: 5px;
-      background-color: var(--bg-color);
-      color: var(--text-color);
+      padding: 10px 12px;
+      font-size: 14px;
+      background-color: var(--bg-input);
+      color: var(--text-primary);
       border: 1px solid var(--border-color);
-      box-sizing: border-box;
+      border-radius: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
     }
 
-    #status, #warning {
-      margin: 10px 0;
-      text-align: center;
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(51, 133, 116, 0.15);
     }
 
-    .checkbox-container {
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+      font-family: inherit;
+    }
+
+    .form-select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+
+    .form-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* Topic Badges */
+    /* Badges (Topics & Tags) */
+    .topics-container,
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px;
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      min-height: 42px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .topics-container:focus-within,
+    .tags-container:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(51, 133, 116, 0.15);
+    }
+
+    .topic-badge,
+    .tag-badge {
       display: flex;
       align-items: center;
-      white-space: nowrap; /* Prevent text from wrapping */
-      margin-top: 5px;
+      background-color: var(--primary-light);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    .topic-remove,
+    .tag-remove {
+      margin-left: 6px;
+      cursor: pointer;
+      opacity: 0.8;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 12px;
+      height: 12px;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .topic-remove:hover,
+    .tag-remove:hover {
+      opacity: 1;
+    }
+
+    .topic-input-field,
+    .tag-input-field {
+      border: none;
+      outline: none;
+      background: transparent;
+      padding: 4px 0;
+      flex: 1;
+      min-width: 80px;
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    /* File Attachment */
+    .file-section {
+      margin-bottom: 14px;
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .file-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--primary);
+      background-color: transparent;
+      border: 1px dashed var(--primary);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .file-btn:hover {
+      background-color: rgba(51, 133, 116, 0.1);
+    }
+
+    .file-preview {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+    }
+
+    .file-preview.visible {
+      display: flex;
+    }
+
+    .file-icon {
+      font-size: 20px;
+    }
+
+    .file-info {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .file-name {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-size {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .file-remove {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+
+    .file-remove:hover {
+      color: #e53935;
+    }
+
+    /* Chips (Priority & Theme) */
+    .chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      background-color: var(--bg-input);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chip:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .chip.active {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    /* Send Button */
+    .send-btn,
+    .save-btn {
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #338574 0%, #2a6e60 100%);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 4px;
+    }
+
+    .send-btn:hover,
+    .save-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(51, 133, 116, 0.3);
+    }
+
+    .send-btn:active,
+    .save-btn:active {
+      transform: translateY(0);
+    }
+
+    .send-btn:disabled,
+    .save-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Status Message */
+    .status {
+      text-align: center;
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      display: none;
+    }
+
+    .status.visible {
+      display: block;
+    }
+
+    .status.success {
+      background-color: rgba(51, 133, 116, 0.15);
+      color: var(--primary);
+    }
+
+    .status.error {
+      background-color: rgba(229, 57, 53, 0.15);
+      color: #e53935;
+    }
+
+    .status.warning {
+      background-color: rgba(255, 152, 0, 0.15);
+      color: #f57c00;
+    }
+
+    /* Collapsible Advanced Options */
+    .advanced-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      margin-bottom: 12px;
+      user-select: none;
+    }
+
+    .advanced-toggle:hover {
+      color: var(--primary);
+    }
+
+    .advanced-toggle .arrow {
+      transition: transform 0.2s;
+    }
+
+    .advanced-toggle.open .arrow {
+      transform: rotate(90deg);
+    }
+
+    .advanced-options {
+      display: none;
+    }
+
+    .advanced-options.visible {
+      display: block;
+    }
+
+    /* Settings View */
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin: 12px 0 8px 0;
+      color: var(--text-secondary);
+    }
+
+    .section-title:first-of-type {
+      margin-top: 0;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .checkbox-group label {
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .divider {
+      height: 1px;
+      background-color: var(--border-color);
+      margin: 10px 0;
     }
   </style>
 </head>
-<body>
-  <div class="form-container">
-    <textarea id="message" rows="4"></textarea>
-    <select id="topic-select"></select>
-  </div>
-  <div class="container">
-    <button id="send">Send to ntfy</button>
-    <span class="open-url" title="Open ntfy URL">&#128279;</span>
-    <span class="settings" id="settings-icon" title="Settings">&#9881;</span>
-  </div>
-  <div id="warning" class="hidden">Please configure ntfy settings first.</div>
-  <div id="status"></div>
-  <div id="settings" class="hidden form-container">
-    <label for="url">ntfy URL:</label>
-    <input type="text" id="url">
-    <label for="token">Token (optional):</label>
-    <input type="password" id="token">
-    <label for="topics">Topics (comma separated):</label>
-    <input type="text" id="topics">
-    <div class="checkbox-container">
-      <label for="prefill">Enable Prefill with URL:</label>
-      <input type="checkbox" id="prefill">
+
+<body data-theme="auto">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <button class="back-btn" id="back-btn" title="Back">←</button>
+      <div class="header-title">
+        <img src="icons/icon48.png" alt="ntfy" style="width: 20px; height: 20px;">
+        <span id="header-text">Send to ntfy</span>
+      </div>
     </div>
-    <div style="margin-top: 10px;">
-      <button id="save">Save Configuration</button>
+    <div class="header-actions">
+      <button class="icon-btn" id="open-url-btn" title="Open ntfy" disabled>🔗</button>
+      <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
     </div>
   </div>
+
+  <!-- Main View -->
+  <div class="view active" id="main-view">
+    <div class="main-content" id="main-content">
+      <!-- Topic Selection -->
+      <div class="form-group">
+        <label class="form-label" for="topic-select">Topic</label>
+        <select class="form-select" id="topic-select"></select>
+      </div>
+
+      <!-- Title (Optional) -->
+      <div class="form-group">
+        <label class="form-label" for="title-input">Title (optional)</label>
+        <input type="text" class="form-input" id="title-input" placeholder="Notification title...">
+      </div>
+
+      <!-- Message -->
+      <div class="form-group">
+        <label class="form-label" for="message-input">Message</label>
+        <textarea class="form-textarea" id="message-input" placeholder="Your message..." rows="3"></textarea>
+      </div>
+
+      <!-- File Attachment -->
+      <div class="file-section">
+        <div class="file-input-wrapper">
+          <input type="file" class="file-input" id="file-input">
+          <button class="file-btn" id="file-btn">
+            📎 Attach file
+          </button>
+        </div>
+        <div class="file-preview" id="file-preview">
+          <span class="file-icon">📄</span>
+          <div class="file-info">
+            <div class="file-name" id="file-name"></div>
+            <div class="file-size" id="file-size"></div>
+          </div>
+          <button class="file-remove" id="file-remove" title="Remove file">×</button>
+        </div>
+      </div>
+
+      <!-- Advanced Options Toggle -->
+      <div class="advanced-toggle" id="advanced-toggle">
+        <span class="arrow">▶</span>
+        Advanced options
+      </div>
+
+      <!-- Advanced Options -->
+      <div class="advanced-options" id="advanced-options">
+        <!-- Priority -->
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <div class="chips" id="priority-chips">
+            <button class="chip" data-priority="1">Min</button>
+            <button class="chip" data-priority="2">Low</button>
+            <button class="chip active" data-priority="3">Default</button>
+            <button class="chip" data-priority="4">High</button>
+            <button class="chip" data-priority="5">Urgent</button>
+          </div>
+        </div>
+
+        <!-- Tags -->
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div class="tags-container" id="tags-container">
+            <input type="text" class="tag-input-field" id="new-tag-input" placeholder="Add tags...">
+          </div>
+          <p class="form-hint">Press Enter to add</p>
+        </div>
+      </div>
+
+      <!-- Send Button -->
+      <button class="send-btn" id="send-btn">Send Notification</button>
+
+      <!-- Status Message -->
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <!-- Settings View -->
+  <div class="view" id="settings-view">
+    <div class="main-content">
+
+
+      <div class="section-title">Server Connection</div>
+
+      <div class="form-group">
+        <label class="form-label" for="url-input">ntfy Server URL</label>
+        <input type="text" class="form-input" id="url-input" placeholder="https://ntfy.sh">
+        <p class="form-hint">Base URL of your ntfy server</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="token-input">Access Token (optional)</label>
+        <input type="password" class="form-input" id="token-input" placeholder="tk_...">
+        <p class="form-hint">For private topics or authenticated servers</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">Topics</div>
+
+      <div class="form-group">
+
+        <div class="topics-container" id="topics-container">
+          <input type="text" class="topic-input-field" id="new-topic-input" placeholder="Add topic...">
+        </div>
+        <p class="form-hint">Press Enter to add</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">General</div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="prefill-checkbox">
+        <label for="prefill-checkbox">Prefill with current page URL</label>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">Appearance</div>
+
+      <div class="form-group">
+        <label class="form-label">Theme</label>
+        <div class="chips" id="theme-chips">
+          <button class="chip" data-theme="light">☀️ Light</button>
+          <button class="chip" data-theme="dark">🌙 Dark</button>
+          <button class="chip active" data-theme="auto">🔄 Auto</button>
+        </div>
+      </div>
+
+      <!-- Save button removed for auto-save -->
+      <div class="status" id="settings-status"></div>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
+
 </html>
