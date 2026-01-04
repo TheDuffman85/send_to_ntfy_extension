@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('file-input');
-    const selectBtn = document.getElementById('select-btn');
     const dropZone = document.getElementById('drop-zone');
     const status = document.getElementById('status');
 
@@ -9,10 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const theme = urlParams.get('theme') || 'auto';
     document.body.setAttribute('data-theme', theme);
 
-    // Click handlers
-    selectBtn.addEventListener('click', () => {
-        fileInput.click();
-    });
+    // Click handler for drop zone
 
     dropZone.addEventListener('click', () => {
         fileInput.click();
@@ -59,8 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function processFile(file) {
-        selectBtn.disabled = true;
-        selectBtn.textContent = 'Processing...';
         dropZone.style.pointerEvents = 'none';
         dropZone.style.opacity = '0.6';
 
@@ -116,8 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message) {
         status.textContent = message;
         status.className = 'status visible error';
-        selectBtn.disabled = false;
-        selectBtn.textContent = 'Browse Files';
         dropZone.style.pointerEvents = '';
         dropZone.style.opacity = '';
     }

@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedPriority = 3;
   let isSettingsView = false;
 
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'prefillEnabled', 'theme', 'priority', 'lastTags', 'lastTopic'];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'prefillEnabled', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled'];
 
   // Initialize
   init();
@@ -109,8 +109,12 @@ document.addEventListener('DOMContentLoaded', () => {
         accessToken: items.accessToken || '',
         prefillEnabled: items.prefillEnabled !== false,
         prefillEnabled: items.prefillEnabled !== false,
-        theme: items.theme || 'auto'
+        theme: items.theme || 'auto',
+        sendAnotherEnabled: items.sendAnotherEnabled === true
       };
+
+      // Restore 'Send another' checkbox state
+      elements.sendAnotherCheckbox.checked = config.sendAnotherEnabled;
 
       if (items.priority) {
         selectedPriority = items.priority;
@@ -246,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Open file picker in a popup window to avoid main popup closing
     const filePickerUrl = chrome.runtime.getURL(`filepicker.html?theme=${config.theme}`);
     const width = 450;
-    const height = 400;
+    const height = 320;
 
     // Get current window to center the popup
     chrome.windows.getCurrent((currentWindow) => {
@@ -458,6 +462,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Send message
     elements.sendBtn.addEventListener('click', sendNotification);
 
+    // Send another checkbox - save state on change
+    elements.sendAnotherCheckbox.addEventListener('change', () => {
+      config.sendAnotherEnabled = elements.sendAnotherCheckbox.checked;
+      saveToStorage({ sendAnotherEnabled: config.sendAnotherEnabled });
+    });
+
     // File handling
     elements.fileBtn.addEventListener('click', handleFileButtonClick);
     elements.fileInput.addEventListener('change', handleFileSelect);
@@ -598,6 +608,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.topicDropdownText.textContent = topic;
     updateCustomDropdownSelection(topic);
     closeTopicDropdown();
+
+    // Save the selected topic
+    config.lastTopic = topic;
+    saveToStorage({ lastTopic: topic });
   }
 
   function updateCustomDropdownSelection(selectedValue) {
@@ -683,6 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tags.includes(value)) {
           tags.push(value);
           renderTags();
+          saveToStorage({ lastTags: [...tags] });
         }
         elements.newTagInput.value = '';
       }
@@ -691,6 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (tags.length > 0) {
         tags.pop();
         renderTags();
+        saveToStorage({ lastTags: [...tags] });
       }
     }
   }
@@ -700,6 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const index = parseInt(e.target.dataset.index, 10);
       tags.splice(index, 1);
       renderTags();
+      saveToStorage({ lastTags: [...tags] });
     }
 
     // Focus input if clicking on container
@@ -884,8 +901,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // tags = []; // Keep last used tags
         // renderTags();
 
-        // Persist tags as last used
-        await saveToStorage({ lastTags: [...tags], lastTopic: topic });
 
         await removeFile();
         // Clear any saved draft state so it doesn't overwrite preferences next time
