@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('file-input');
     const selectBtn = document.getElementById('select-btn');
+    const dropZone = document.getElementById('drop-zone');
     const status = document.getElementById('status');
 
     // Apply theme
@@ -8,16 +9,60 @@ document.addEventListener('DOMContentLoaded', () => {
     const theme = urlParams.get('theme') || 'auto';
     document.body.setAttribute('data-theme', theme);
 
+    // Click handlers
     selectBtn.addEventListener('click', () => {
         fileInput.click();
     });
 
-    fileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    dropZone.addEventListener('click', () => {
+        fileInput.click();
+    });
 
+    // Drag and drop handlers
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            processFile(files[0]);
+        }
+    });
+
+    // Prevent default drag behavior on window
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            processFile(file);
+        }
+    });
+
+    async function processFile(file) {
         selectBtn.disabled = true;
         selectBtn.textContent = 'Processing...';
+        dropZone.style.pointerEvents = 'none';
+        dropZone.style.opacity = '0.6';
 
         try {
             const reader = new FileReader();
@@ -53,27 +98,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 800);
 
                 } catch (err) {
-                    status.textContent = 'Error: ' + err.message;
-                    status.className = 'status visible error';
-                    selectBtn.disabled = false;
-                    selectBtn.textContent = '📁 Choose File';
+                    showError('Error: ' + err.message);
                 }
             };
 
             reader.onerror = () => {
-                status.textContent = 'Failed to read file';
-                status.className = 'status visible error';
-                selectBtn.disabled = false;
-                selectBtn.textContent = '📁 Choose File';
+                showError('Failed to read file');
             };
 
             reader.readAsDataURL(file);
 
         } catch (error) {
-            status.textContent = 'Error: ' + error.message;
-            status.className = 'status visible error';
-            selectBtn.disabled = false;
-            selectBtn.textContent = '📁 Choose File';
+            showError('Error: ' + error.message);
         }
-    });
+    }
+
+    function showError(message) {
+        status.textContent = message;
+        status.className = 'status visible error';
+        selectBtn.disabled = false;
+        selectBtn.textContent = 'Browse Files';
+        dropZone.style.pointerEvents = '';
+        dropZone.style.opacity = '';
+    }
 });

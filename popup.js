@@ -13,6 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Main form
     topicSelect: document.getElementById('topic-select'),
+    topicDropdown: document.getElementById('topic-dropdown'),
+    topicDropdownSelected: document.getElementById('topic-dropdown-selected'),
+    topicDropdownText: document.getElementById('topic-dropdown-text'),
+    topicDropdownOptions: document.getElementById('topic-dropdown-options'),
     titleInput: document.getElementById('title-input'),
     messageInput: document.getElementById('message-input'),
     tagsContainer: document.getElementById('tags-container'),
@@ -37,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Actions
     sendBtn: document.getElementById('send-btn'),
+    sendAnotherCheckbox: document.getElementById('send-another-checkbox'),
     saveBtn: null, // Removed for auto-save
     // Status
     status: document.getElementById('status'),
@@ -241,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Open file picker in a popup window to avoid main popup closing
     const filePickerUrl = chrome.runtime.getURL(`filepicker.html?theme=${config.theme}`);
     const width = 450;
-    const height = 350;
+    const height = 400;
 
     // Get current window to center the popup
     chrome.windows.getCurrent((currentWindow) => {
@@ -357,7 +362,11 @@ document.addEventListener('DOMContentLoaded', () => {
           // However, if topic was manually selected and differs? 
           // Actually topicSelect is populated from config. 
           // We should just set the value.
-          if (draft.topic) elements.topicSelect.value = draft.topic;
+          if (draft.topic) {
+            elements.topicSelect.value = draft.topic;
+            elements.topicDropdownText.textContent = draft.topic;
+            updateCustomDropdownSelection(draft.topic);
+          }
         }
         resolve();
       });
@@ -464,6 +473,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Advanced options toggle
     elements.advancedToggle.addEventListener('click', toggleAdvancedOptions);
 
+    // Custom topic dropdown
+    elements.topicDropdownSelected.addEventListener('click', toggleTopicDropdown);
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!elements.topicDropdown.contains(e.target)) {
+        closeTopicDropdown();
+      }
+    });
+
     // Listen for file selection from external picker
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes.storedFile) {
@@ -529,10 +548,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update topic dropdown
     if (!isConfigured) {
       elements.topicSelect.innerHTML = '<option disabled>No topics configured</option>';
+      elements.topicDropdownText.textContent = 'No topics configured';
+      elements.topicDropdownOptions.innerHTML = '';
     } else {
       updateTopicDropdown();
       if (config.lastTopic) {
         elements.topicSelect.value = config.lastTopic;
+        elements.topicDropdownText.textContent = config.lastTopic;
+        updateCustomDropdownSelection(config.lastTopic);
       }
     }
 
@@ -542,13 +565,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateTopicDropdown() {
     elements.topicSelect.innerHTML = '';
+    elements.topicDropdownOptions.innerHTML = '';
 
     config.topics.forEach(topic => {
+      // Hidden select for form value
       const option = document.createElement('option');
       option.value = topic;
       option.textContent = topic;
       elements.topicSelect.appendChild(option);
+
+      // Custom dropdown option
+      const customOption = document.createElement('div');
+      customOption.className = 'custom-dropdown-option';
+      customOption.dataset.value = topic;
+      customOption.textContent = topic;
+      customOption.addEventListener('click', () => selectTopic(topic));
+      elements.topicDropdownOptions.appendChild(customOption);
     });
+
+    // Update displayed text
+    if (config.topics.length > 0) {
+      const selectedTopic = elements.topicSelect.value || config.topics[0];
+      elements.topicDropdownText.textContent = selectedTopic;
+      updateCustomDropdownSelection(selectedTopic);
+    } else {
+      elements.topicDropdownText.textContent = 'No topics configured';
+    }
+  }
+
+  function selectTopic(topic) {
+    elements.topicSelect.value = topic;
+    elements.topicDropdownText.textContent = topic;
+    updateCustomDropdownSelection(topic);
+    closeTopicDropdown();
+  }
+
+  function updateCustomDropdownSelection(selectedValue) {
+    elements.topicDropdownOptions.querySelectorAll('.custom-dropdown-option').forEach(opt => {
+      opt.classList.toggle('selected', opt.dataset.value === selectedValue);
+    });
+  }
+
+  function toggleTopicDropdown() {
+    elements.topicDropdown.classList.toggle('open');
+  }
+
+  function closeTopicDropdown() {
+    elements.topicDropdown.classList.remove('open');
   }
 
   function updatePriorityUI() {
@@ -764,7 +827,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     elements.sendBtn.disabled = true;
-    elements.sendBtn.textContent = 'Sending...';
 
     try {
       const urlObj = new URL(config.apiUrl);
@@ -817,7 +879,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (response.ok) {
-        // showStatus('Notification sent!', 'success'); // Removed per user request
         elements.messageInput.value = '';
         elements.titleInput.value = '';
         // tags = []; // Keep last used tags
@@ -834,8 +895,13 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePriorityUI();
         prefillMessage();
 
-        // Close the popup immediately on success
-        setTimeout(() => window.close(), 100);
+        // Close the popup unless "Send another" is checked
+        if (!elements.sendAnotherCheckbox.checked) {
+          setTimeout(() => window.close(), 100);
+        } else {
+          // Only show success message if staying open
+          showStatus('Notification sent!', 'success');
+        }
       } else {
         const errorText = await response.text();
         showStatus(`Failed: ${response.status} ${errorText.slice(0, 50)}`, 'error');
@@ -844,7 +910,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus(`Error: ${error.message}`, 'error');
     } finally {
       elements.sendBtn.disabled = false;
-      elements.sendBtn.textContent = 'Send Notification';
     }
   }
 });

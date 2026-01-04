@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=350">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
       /* NTFY.sh inspired color palette */
@@ -55,7 +58,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       width: 350px;
       background-color: var(--bg-main);
       color: var(--text-primary);
@@ -186,8 +189,8 @@
 
     /* Main Content */
     .main-content {
-      padding: 16px;
-      padding-bottom: 16px;
+      padding: 12px 16px;
+      padding-bottom: 12px;
       min-height: auto;
     }
 
@@ -200,60 +203,144 @@
 
     /* Form Elements */
     .form-group {
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     .form-label {
       display: block;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--text-secondary);
       margin-bottom: 4px;
       letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+
+    .form-group:focus-within .form-label {
+      color: var(--primary);
     }
 
     .form-input,
     .form-select,
     .form-textarea {
       width: 100%;
-      padding: 10px 12px;
+      padding: 10px 0;
       font-size: 14px;
-      background-color: var(--bg-input);
+      background-color: transparent;
       color: var(--text-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      border: none;
+      border-bottom: 1px solid var(--border-color);
+      border-radius: 0;
+      transition: border-color 0.2s;
       outline: none;
     }
 
     .form-input:focus,
     .form-select:focus,
     .form-textarea:focus {
-      border-color: var(--border-focus);
-      box-shadow: 0 0 0 3px rgba(51, 133, 116, 0.15);
+      border-bottom-color: var(--border-focus);
+      border-bottom-width: 2px;
     }
 
     .form-input::placeholder,
     .form-textarea::placeholder,
     .topic-input-field::placeholder,
     .tag-input-field::placeholder {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-secondary);
     }
 
     .form-textarea {
       resize: vertical;
-      min-height: 80px;
+      min-height: 60px;
       font-family: inherit;
     }
 
     .form-select {
+      display: none;
+    }
+
+    /* Custom Dropdown */
+    .custom-dropdown {
+      position: relative;
+      width: 100%;
+    }
+
+    .custom-dropdown-selected {
       cursor: pointer;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      padding-right: 32px;
+      padding: 10px 28px 10px 0;
+      border: none;
+      border-bottom: 1px solid var(--border-color);
+      background-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .custom-dropdown-selected:hover {
+      border-bottom-color: var(--border-focus);
+    }
+
+    .custom-dropdown.open .custom-dropdown-selected {
+      border-bottom-color: var(--border-focus);
+      border-bottom-width: 2px;
+    }
+
+    .custom-dropdown-arrow {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      transition: transform 0.2s;
+    }
+
+    .custom-dropdown.open .custom-dropdown-arrow {
+      transform: translateY(-50%) rotate(180deg);
+    }
+
+    .custom-dropdown-arrow svg {
+      width: 12px;
+      height: 12px;
+      fill: var(--text-secondary);
+    }
+
+    .custom-dropdown-options {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-top: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .custom-dropdown.open .custom-dropdown-options {
+      display: block;
+    }
+
+    .custom-dropdown-option {
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text-primary);
+      transition: background-color 0.15s;
+    }
+
+    .custom-dropdown-option:hover {
+      background-color: rgba(51, 133, 116, 0.1);
+    }
+
+    .custom-dropdown-option.selected {
+      background-color: rgba(51, 133, 116, 0.15);
+      color: var(--primary);
     }
 
     .form-hint {
@@ -268,19 +355,21 @@
     .tags-container {
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: 6px;
-      padding: 6px;
-      background-color: var(--bg-input);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      min-height: 42px;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      padding: 8px 0;
+      background-color: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border-color);
+      border-radius: 0;
+      min-height: 38px;
+      transition: border-color 0.2s;
     }
 
     .topics-container:focus-within,
     .tags-container:focus-within {
-      border-color: var(--border-focus);
-      box-shadow: 0 0 0 3px rgba(51, 133, 116, 0.15);
+      border-bottom-color: var(--border-focus);
+      border-bottom-width: 2px;
     }
 
     .topic-badge,
@@ -328,7 +417,7 @@
 
     /* File Attachment */
     .file-section {
-      margin-bottom: 14px;
+      margin-bottom: 8px;
     }
 
     .file-input {
@@ -435,8 +524,63 @@
       color: white;
     }
 
-    /* Send Button */
-    .send-btn,
+    /* Send Footer */
+    /* Send Footer */
+    .send-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      padding-top: 8px;
+    }
+
+    .send-another-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .send-another-group input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .send-another-group label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    /* Send Button - Text style like ntfy.sh */
+    .send-btn {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary);
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .send-btn:hover {
+      background-color: rgba(51, 133, 116, 0.1);
+    }
+
+    .send-btn:active {
+      background-color: rgba(51, 133, 116, 0.2);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .save-btn {
       width: 100%;
       padding: 12px 20px;
@@ -451,18 +595,15 @@
       margin-top: 4px;
     }
 
-    .send-btn:hover,
     .save-btn:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(51, 133, 116, 0.3);
     }
 
-    .send-btn:active,
     .save-btn:active {
       transform: translateY(0);
     }
 
-    .send-btn:disabled,
     .save-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
@@ -504,11 +645,13 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
       color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
-      margin-bottom: 12px;
       user-select: none;
+      margin-bottom: 8px;
+      margin-top: 4px;
     }
 
     .advanced-toggle:hover {
@@ -617,13 +760,24 @@
     <div class="main-content" id="main-content">
       <!-- Topic Selection -->
       <div class="form-group">
-        <label class="form-label" for="topic-select">Topic</label>
+        <label class="form-label">Topic</label>
+        <div class="custom-dropdown" id="topic-dropdown">
+          <div class="custom-dropdown-selected" id="topic-dropdown-selected">
+            <span id="topic-dropdown-text">Select topic...</span>
+          </div>
+          <div class="custom-dropdown-arrow">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
+              <path d="M2 4l4 4 4-4" />
+            </svg>
+          </div>
+          <div class="custom-dropdown-options" id="topic-dropdown-options"></div>
+        </div>
         <select class="form-select" id="topic-select"></select>
       </div>
 
       <!-- Title (Optional) -->
       <div class="form-group">
-        <label class="form-label" for="title-input">Title (optional)</label>
+        <label class="form-label" for="title-input">Title</label>
         <input type="text" class="form-input" id="title-input" placeholder="Notification title...">
       </div>
 
@@ -675,14 +829,19 @@
         <div class="form-group">
           <label class="form-label">Tags</label>
           <div class="tags-container" id="tags-container">
-            <input type="text" class="tag-input-field" id="new-tag-input" placeholder="Add tags...">
+            <input type="text" class="tag-input-field" id="new-tag-input" placeholder="Press enter to add tag">
           </div>
-          <p class="form-hint">Press Enter to add</p>
         </div>
       </div>
 
-      <!-- Send Button -->
-      <button class="send-btn" id="send-btn">Send Notification</button>
+      <!-- Send Footer -->
+      <div class="send-footer">
+        <div class="send-another-group">
+          <input type="checkbox" id="send-another-checkbox">
+          <label for="send-another-checkbox">Send another</label>
+        </div>
+        <button class="send-btn" id="send-btn">Send</button>
+      </div>
 
       <!-- Status Message -->
       <div class="status" id="status"></div>
@@ -715,12 +874,9 @@
       <div class="form-group">
 
         <div class="topics-container" id="topics-container">
-          <input type="text" class="topic-input-field" id="new-topic-input" placeholder="Add topic...">
+          <input type="text" class="topic-input-field" id="new-topic-input" placeholder="Press enter to add topic">
         </div>
-        <p class="form-hint">Press Enter to add</p>
       </div>
-
-      <div class="divider"></div>
 
       <div class="section-title">General</div>
       <div class="checkbox-group">
