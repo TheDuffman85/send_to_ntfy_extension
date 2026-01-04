@@ -235,6 +235,12 @@
       outline: none;
     }
 
+    .form-input:hover,
+    .form-select:hover,
+    .form-textarea:hover {
+      border-bottom-color: var(--border-focus);
+    }
+
     .form-input:focus,
     .form-select:focus,
     .form-textarea:focus {
@@ -366,6 +372,11 @@
       border-radius: 0;
       min-height: 38px;
       transition: border-color 0.2s;
+    }
+
+    .topics-container:hover,
+    .tags-container:hover {
+      border-bottom-color: var(--border-focus);
     }
 
     .topics-container:focus-within,
