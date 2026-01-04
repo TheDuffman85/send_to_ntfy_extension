@@ -77,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function init() {
     await loadConfig();
     await restoreDraftState();
+    await checkSessionAndCleanup(); // Check session and cleanup old files if needed
     await loadStoredFile();
     setupEventListeners();
     updateUI();
@@ -209,6 +210,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (error) {
       console.error('Error loading stored file:', error);
+    }
+  }
+
+  async function checkSessionAndCleanup() {
+    // Hybrid storage approach:
+    // Files are stored in 'local' (large quota).
+    // Session state is tracked in 'session'.
+    // If 'sessionActive' is missing from 'session' storage, it means the browser restarted.
+    // In that case, we clear the file from 'local' storage.
+
+    try {
+      const session = await new Promise(resolve => chrome.storage.session.get(['sessionActive'], resolve));
+
+      if (!session.sessionActive) {
+        console.log('New session detected, cleaning up stored file');
+        await new Promise(resolve => chrome.storage.local.remove(['storedFile'], resolve));
+        await new Promise(resolve => chrome.storage.session.set({ sessionActive: true }, resolve));
+      }
+    } catch (error) {
+      console.error('Error checking session state:', error);
     }
   }
 

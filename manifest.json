@@ -5,7 +5,8 @@
   "description": "Send notifications to ntfy.sh with file attachments, priority, and tags",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "unlimitedStorage"
   ],
   "icons": {
     "16": "icons/icon16.png",
