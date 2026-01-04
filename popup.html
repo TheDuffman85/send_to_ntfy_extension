@@ -229,7 +229,8 @@
       background-color: transparent;
       color: var(--text-primary);
       border: none;
-      border-bottom: 1px solid var(--border-color);
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: -1px;
       border-radius: 0;
       transition: border-color 0.2s;
       outline: none;
@@ -245,7 +246,6 @@
     .form-select:focus,
     .form-textarea:focus {
       border-bottom-color: var(--border-focus);
-      border-bottom-width: 2px;
     }
 
     .form-input::placeholder,
@@ -277,7 +277,8 @@
       cursor: pointer;
       padding: 4px 28px 10px 0;
       border: none;
-      border-bottom: 1px solid var(--border-color);
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: -1px;
       background-color: transparent;
       display: flex;
       align-items: center;
@@ -292,7 +293,6 @@
 
     .custom-dropdown.open .custom-dropdown-selected {
       border-bottom-color: var(--border-focus);
-      border-bottom-width: 2px;
     }
 
     .custom-dropdown-arrow {
@@ -368,7 +368,8 @@
       padding: 4px 0 8px 0;
       background-color: transparent;
       border: none;
-      border-bottom: 1px solid var(--border-color);
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: -1px;
       border-radius: 0;
       min-height: 38px;
       transition: border-color 0.2s;
@@ -382,7 +383,6 @@
     .topics-container:focus-within,
     .tags-container:focus-within {
       border-bottom-color: var(--border-focus);
-      border-bottom-width: 2px;
     }
 
     .topic-badge,
