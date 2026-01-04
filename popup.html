@@ -456,6 +456,27 @@
       background-color: rgba(51, 133, 116, 0.1);
     }
 
+    /* Insert URL Button */
+    .insert-url-btn {
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--primary);
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .insert-url-btn:hover {
+      background-color: rgba(51, 133, 116, 0.1);
+    }
+
+    .insert-url-btn:active {
+      background-color: rgba(51, 133, 116, 0.2);
+    }
+
     .file-preview {
       display: none;
       align-items: center;
@@ -798,7 +819,12 @@
 
       <!-- Message -->
       <div class="form-group">
-        <label class="form-label" for="message-input">Message</label>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label class="form-label" for="message-input">Message</label>
+          <button type="button" id="insert-url-btn" class="insert-url-btn" title="Insert current page URL">
+            🔗 Insert URL
+          </button>
+        </div>
         <textarea class="form-textarea" id="message-input" placeholder="Your message..." rows="3"></textarea>
       </div>
 
@@ -893,11 +919,7 @@
         </div>
       </div>
 
-      <div class="form-label">General</div>
-      <div class="checkbox-group">
-        <input type="checkbox" id="prefill-checkbox">
-        <label for="prefill-checkbox">Prefill with current page URL</label>
-      </div>
+
 
       <div class="divider"></div>
 

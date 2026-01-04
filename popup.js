@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
     topicsInput: null, // Removed
-    prefillCheckbox: document.getElementById('prefill-checkbox'),
+    insertUrlBtn: document.getElementById('insert-url-btn'),
   };
 
   // State
@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     topics: [],
     apiUrl: '',
     accessToken: '',
-    prefillEnabled: true,
+
     theme: 'auto',
     pageUrl: ''
   };
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedPriority = 3;
   let isSettingsView = false;
 
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'prefillEnabled', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled'];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled'];
 
   // Initialize
   init();
@@ -107,8 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
         apiUrl: items.apiUrl || '',
         accessToken: items.accessToken || '',
-        prefillEnabled: items.prefillEnabled !== false,
-        prefillEnabled: items.prefillEnabled !== false,
+
         theme: items.theme || 'auto',
         sendAnotherEnabled: items.sendAnotherEnabled === true
       };
@@ -140,8 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
       accessToken: elements.tokenInput.value,
       accessToken: elements.tokenInput.value,
       topics: config.topics.join(','), // Use current config state which is kept in sync
-      prefillEnabled: elements.prefillCheckbox.checked,
-      prefillEnabled: elements.prefillCheckbox.checked,
+
       theme: config.theme
     };
 
@@ -448,7 +446,8 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.newTopicInput.addEventListener('keydown', handleTopicKeydown);
     elements.topicsContainer.addEventListener('click', handleTopicRemove);
 
-    elements.prefillCheckbox.addEventListener('change', saveConfig);
+    // Insert URL button
+    elements.insertUrlBtn.addEventListener('click', insertCurrentUrl);
 
     // Theme chips
     elements.themeChips.addEventListener('click', (e) => {
@@ -513,8 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.tokenInput.value = config.accessToken;
     // elements.topicsInput.value = config.topics.join(', '); // Removed
     renderTopics(); // Render badges
-    elements.prefillCheckbox.checked = config.prefillEnabled;
-    elements.prefillCheckbox.checked = config.prefillEnabled;
+
     updateThemeChipsUI();
 
     elements.mainView.classList.remove('active');
@@ -569,7 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    prefillMessage();
+
     updatePriorityUI();
   }
 
@@ -635,9 +633,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function prefillMessage() {
-    if (config.prefillEnabled && config.pageUrl && !elements.messageInput.value) {
-      elements.messageInput.value = config.pageUrl;
+  function insertCurrentUrl() {
+    if (config.pageUrl) {
+      // Insert at cursor position or append
+      const textarea = elements.messageInput;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+
+      if (text) {
+        // Insert at cursor position
+        textarea.value = text.substring(0, start) + config.pageUrl + text.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + config.pageUrl.length;
+      } else {
+        // Empty field, just set the value
+        textarea.value = config.pageUrl;
+      }
+      textarea.focus();
     }
   }
 
@@ -908,7 +920,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // selectedPriority = 3; // Keep last used priority
         updatePriorityUI();
-        prefillMessage();
 
         // Close the popup unless "Send another" is checked
         if (!elements.sendAnotherCheckbox.checked) {
