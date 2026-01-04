@@ -7,40 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
     <style>
-        :root {
-            --primary: #338574;
-            --bg-main: #f5f5f5;
-            --bg-card: #ffffff;
-            --text-primary: #1a1a1a;
-            --text-secondary: #666666;
-            --border-color: #e0e0e0;
-        }
-
-        [data-theme="dark"] {
-            --bg-main: #1B2124;
-            --bg-card: #1B2124;
-            --text-primary: #e8e8e8;
-            --text-secondary: #9e9e9e;
-            --border-color: #3a4240;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            [data-theme="auto"] {
-                --bg-main: #1B2124;
-                --bg-card: #1B2124;
-                --text-primary: #e8e8e8;
-                --text-secondary: #9e9e9e;
-                --border-color: #3a4240;
-            }
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        /* Filepicker layout overrides */
         html,
         body {
             height: 100%;
@@ -48,40 +17,16 @@
         }
 
         body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background-color: var(--bg-main);
-            color: var(--text-primary);
             display: flex;
             flex-direction: column;
         }
 
-        /* Header */
         .header {
-            background: linear-gradient(to right, #317f6e 0%, #57a49a 100%);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-            padding: 12px 16px;
             min-height: 56px;
-            display: flex;
-            align-items: center;
             gap: 8px;
             flex-shrink: 0;
         }
 
-        .header-title {
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .header-title img {
-            width: 20px;
-            height: 20px;
-        }
-
-        /* Main content */
         .main-content {
             flex: 1;
             display: flex;
@@ -92,78 +37,10 @@
             text-align: center;
         }
 
-        .subtitle {
-            color: var(--text-secondary);
-            font-size: 13px;
-            margin-bottom: 16px;
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        /* Drop zone */
-        .drop-zone {
-            border: 2px dashed var(--border-color);
-            border-radius: 12px;
-            padding: 28px 24px;
-            margin-bottom: 12px;
-            transition: all 0.2s;
-            cursor: pointer;
-            width: 100%;
-            max-width: 320px;
-        }
-
-        .drop-zone:hover {
-            border-color: var(--primary);
-            background-color: rgba(51, 133, 116, 0.05);
-        }
-
-        .drop-zone.drag-over {
-            border-color: var(--primary);
-            background-color: rgba(51, 133, 116, 0.1);
-            transform: scale(1.02);
-        }
-
-        .drop-zone-icon {
-            font-size: 36px;
-            margin-bottom: 8px;
-        }
-
-        .drop-zone-text {
-            color: var(--text-secondary);
-            font-size: 14px;
-            margin-bottom: 2px;
-        }
-
-        .drop-zone-hint {
-            color: var(--text-secondary);
-            font-size: 12px;
-            opacity: 0.7;
-        }
-
-
-
         .status {
             margin-top: 12px;
             padding: 10px;
             border-radius: 8px;
-            font-size: 13px;
-            display: none;
-        }
-
-        .status.visible {
-            display: block;
-        }
-
-        .status.success {
-            background-color: rgba(51, 133, 116, 0.15);
-            color: var(--primary);
-        }
-
-        .status.error {
-            background-color: rgba(229, 57, 53, 0.15);
-            color: #e53935;
         }
     </style>
 </head>
