@@ -437,6 +437,19 @@ body {
     padding: 4px 8px;
     border-radius: 12px;
     font-size: 13px;
+    cursor: move;
+    user-select: none;
+}
+
+.topic-badge.dragging,
+.tag-badge.dragging {
+    opacity: 0.5;
+}
+
+.topic-badge.drag-over,
+.tag-badge.drag-over {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 2px var(--primary);
 }
 
 .topic-remove,

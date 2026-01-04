@@ -71,6 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let tags = []; // State for tags
 
+  // Drag and drop state
+  let dragSrcIndex = null;
+  let dragType = null;
+
   let selectedPriority = 3;
   let isSettingsView = false;
 
@@ -671,6 +675,85 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==================
+  // Drag and Drop
+  // ==================
+
+  function setupDragAndDrop(element, index, type) {
+    element.draggable = true;
+
+    element.addEventListener('dragstart', (e) => {
+      dragSrcIndex = index;
+      dragType = type;
+      element.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', index);
+    });
+
+    element.addEventListener('dragend', () => {
+      element.classList.remove('dragging');
+      element.classList.remove('drag-over');
+      dragSrcIndex = null;
+      dragType = null;
+    });
+
+    element.addEventListener('dragover', (e) => {
+      e.preventDefault(); // Necessary to allow dropping
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    });
+
+    element.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      if (dragType === type && dragSrcIndex !== index) {
+        element.classList.add('drag-over');
+      }
+    });
+
+    element.addEventListener('dragleave', (e) => {
+      element.classList.remove('drag-over');
+    });
+
+    element.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      element.classList.remove('drag-over');
+
+      if (dragType !== type) return;
+      if (dragSrcIndex === null) return;
+      if (dragSrcIndex === index) return;
+
+      // Adjust index if moving item from earlier position to later position
+      // because removal shifts indices
+      // Note: Splice logic actually handles "insert at index" naturally, 
+      // but interpretation of "drop on" varies.
+      // Current implementation: Remove then Insert.
+
+      // We will perform the move in the data model and re-render.
+      // Since we re-render, the dragend might not fire on the original element,
+      // so we reset state here too.
+
+      const srcIdx = dragSrcIndex;
+      dragSrcIndex = null;
+      dragType = null;
+
+      if (type === 'tag') {
+        const item = tags[srcIdx];
+        tags.splice(srcIdx, 1);
+        tags.splice(index, 0, item);
+        renderTags();
+        saveToStorage({ lastTags: [...tags] });
+      } else if (type === 'topic') {
+        const item = config.topics[srcIdx];
+        config.topics.splice(srcIdx, 1);
+        config.topics.splice(index, 0, item);
+        renderTopics();
+        saveConfig();
+      }
+    });
+  }
+
+  // ==================
   // Tags Handling
   // ==================
 
@@ -684,6 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const badge = document.createElement('div');
       badge.className = 'tag-badge';
       badge.textContent = tag;
+
+      setupDragAndDrop(badge, index, 'tag');
+
       const removeSpan = document.createElement('span');
       removeSpan.className = 'tag-remove';
       removeSpan.dataset.index = index;
@@ -761,6 +847,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const badge = document.createElement('div');
       badge.className = 'topic-badge';
       badge.textContent = topic;
+
+      setupDragAndDrop(badge, index, 'topic');
+
       const removeSpan = document.createElement('span');
       removeSpan.className = 'topic-remove';
       removeSpan.dataset.index = index;
