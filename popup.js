@@ -91,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     updateUI();
     // Ensure priority UI is updated after config load
-    // Ensure priority UI is updated after config load
     updatePriorityUI();
     applyTheme();
     // Render initial empty tags or restored ones
@@ -140,7 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveConfig() {
     const newConfig = {
       apiUrl: elements.urlInput.value.trim(),
-      accessToken: elements.tokenInput.value,
       accessToken: elements.tokenInput.value,
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
@@ -249,10 +247,9 @@ document.addEventListener('DOMContentLoaded', () => {
     await saveDraftState();
 
     // Open file picker in a popup window to avoid main popup closing
-    // Open file picker in a popup window to avoid main popup closing
     const filePickerUrl = chrome.runtime.getURL(`filepicker.html?theme=${config.theme}`);
     const width = 450;
-    const height = 320;
+    const height = 340;
 
     // Get current window to center the popup
     chrome.windows.getCurrent((currentWindow) => {
@@ -508,14 +505,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate settings fields with current config
     elements.urlInput.value = config.apiUrl;
     elements.tokenInput.value = config.accessToken;
-    elements.tokenInput.value = config.accessToken;
     renderTopics(); // Render badges
 
     updateThemeChipsUI();
 
     elements.mainView.classList.remove('active');
     elements.settingsView.classList.add('active');
-    elements.backBtn.classList.add('visible');
     elements.backBtn.classList.add('visible');
     elements.settingsBtn.style.display = 'none';
     elements.openUrlBtn.style.display = 'none';
@@ -547,7 +542,6 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.mainContent.classList.toggle('disabled', !isConfigured);
     elements.settingsBtn.classList.toggle('highlight', !isConfigured);
 
-    // Enable/disable the open URL button based on configuration
     // Enable/disable the open URL button based on configuration
     elements.openUrlBtn.disabled = !config.apiUrl;
 
