@@ -600,10 +600,12 @@ document.addEventListener('DOMContentLoaded', () => {
     tags.forEach((tag, index) => {
       const badge = document.createElement('div');
       badge.className = 'tag-badge';
-      badge.innerHTML = `
-        ${tag}
-        <span class="tag-remove" data-index="${index}">×</span>
-      `;
+      badge.textContent = tag;
+      const removeSpan = document.createElement('span');
+      removeSpan.className = 'tag-remove';
+      removeSpan.dataset.index = index;
+      removeSpan.textContent = '×';
+      badge.appendChild(removeSpan);
       elements.tagsContainer.insertBefore(badge, elements.newTagInput);
     });
   }
@@ -672,10 +674,12 @@ document.addEventListener('DOMContentLoaded', () => {
     config.topics.forEach((topic, index) => {
       const badge = document.createElement('div');
       badge.className = 'topic-badge';
-      badge.innerHTML = `
-        ${topic}
-        <span class="topic-remove" data-index="${index}">×</span>
-      `;
+      badge.textContent = topic;
+      const removeSpan = document.createElement('span');
+      removeSpan.className = 'topic-remove';
+      removeSpan.dataset.index = index;
+      removeSpan.textContent = '×';
+      badge.appendChild(removeSpan);
       elements.topicsContainer.insertBefore(badge, elements.newTopicInput);
     });
   }
