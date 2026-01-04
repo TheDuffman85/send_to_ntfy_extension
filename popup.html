@@ -63,7 +63,8 @@
 
     /* Header */
     .header {
-      background: linear-gradient(135deg, #338574 0%, #2a6e60 100%);
+      background: linear-gradient(to right, #317f6e 0%, #57a49a 100%);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
       padding: 12px 16px;
       display: flex;
       justify-content: space-between;
@@ -278,7 +279,7 @@
     .tag-badge {
       display: flex;
       align-items: center;
-      background-color: var(--primary-light);
+      background: linear-gradient(to right, #317f6e 0%, #57a49a 100%);
       color: white;
       padding: 4px 8px;
       border-radius: 12px;
@@ -421,8 +422,8 @@
     }
 
     .chip.active {
-      background-color: var(--primary);
-      border-color: var(--primary);
+      background: linear-gradient(to right, #317f6e 0%, #57a49a 100%);
+      border-color: #317f6e;
       color: white;
     }
 
@@ -434,7 +435,7 @@
       font-size: 14px;
       font-weight: 600;
       color: white;
-      background: linear-gradient(135deg, #338574 0%, #2a6e60 100%);
+      background: linear-gradient(to right, #317f6e 0%, #57a49a 100%);
       border: none;
       border-radius: 8px;
       cursor: pointer;
@@ -721,8 +722,8 @@
 
       <div class="divider"></div>
 
+      <div class="section-title">Appearance</div>
       <div class="form-group">
-        <label class="form-label">Appearance</label>
         <div class="chips" id="theme-chips">
           <button class="chip" data-theme="light">☀️ Light</button>
           <button class="chip" data-theme="dark">🌙 Dark</button>
