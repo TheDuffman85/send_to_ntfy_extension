@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Send to ntfy",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Send notifications to ntfy.sh with file attachments, priority, and tags",
   "permissions": [
     "activeTab",
