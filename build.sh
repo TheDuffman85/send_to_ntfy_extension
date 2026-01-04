@@ -9,7 +9,7 @@ mkdir -p build
 target=$1
 
 # File list to package
-FILES="manifest.json popup.html popup.js filepicker.html filepicker.js styles.css icons"
+FILES="manifest.json popup.html popup.js filepicker.html filepicker.js styles.css icons fonts"
 
 build_chrome() {
   rm -f build/send-to-ntfy-chrome.zip

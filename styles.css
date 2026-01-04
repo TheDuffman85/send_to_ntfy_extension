@@ -39,7 +39,7 @@
     --primary-light: #4a9d8c;
 
     /* Light theme */
-    --bg-main: #f5f5f5;
+    --bg-main: #ffffff;
     --bg-card: #ffffff;
     --bg-input: #ffffff;
     --text-primary: #1a1a1a;
@@ -677,34 +677,7 @@ body {
     cursor: not-allowed;
 }
 
-.save-btn {
-    width: 100%;
-    padding: 12px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    color: white;
-    background: linear-gradient(to right, #317f6e 0%, #57a49a 100%);
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    margin-top: 4px;
-}
 
-.save-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(51, 133, 116, 0.3);
-}
-
-.save-btn:active {
-    transform: translateY(0);
-}
-
-.save-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-}
 
 /* ========================================
    Status Message

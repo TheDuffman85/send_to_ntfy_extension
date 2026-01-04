@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messageInput: document.getElementById('message-input'),
     tagsContainer: document.getElementById('tags-container'),
     newTagInput: document.getElementById('new-tag-input'),
-    tagsInput: null, // Removed
+
 
     // File handling
     fileInput: document.getElementById('file-input'),
@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Actions
     sendBtn: document.getElementById('send-btn'),
     sendAnotherCheckbox: document.getElementById('send-another-checkbox'),
-    saveBtn: null, // Removed for auto-save
+
     // Status
     status: document.getElementById('status'),
     settingsStatus: document.getElementById('settings-status'),
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tokenInput: document.getElementById('token-input'),
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
-    topicsInput: null, // Removed
+
     insertUrlBtn: document.getElementById('insert-url-btn'),
   };
 
@@ -437,10 +437,6 @@ document.addEventListener('DOMContentLoaded', () => {
       debouncedSave();
     });
 
-    // elements.topicsInput.addEventListener('input', () => {
-    // showSettingsStatus('Saving...', 'visible');
-    // debouncedSave();
-    // });
 
     // Topics handling (badges)
     elements.newTopicInput.addEventListener('keydown', handleTopicKeydown);
@@ -508,9 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate settings fields with current config
     elements.urlInput.value = config.apiUrl;
     elements.tokenInput.value = config.accessToken;
-    elements.urlInput.value = config.apiUrl;
     elements.tokenInput.value = config.accessToken;
-    // elements.topicsInput.value = config.topics.join(', '); // Removed
     renderTopics(); // Render badges
 
     updateThemeChipsUI();
