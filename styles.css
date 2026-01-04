@@ -799,8 +799,35 @@ body {
 .divider {
     height: 1px;
     background-color: var(--border-color);
-    margin: 10px 0;
+    margin: 16px 0;
 }
+
+/* ========================================
+   Tooltip
+   ======================================== */
+
+.tooltip {
+    position: fixed;
+    padding: 6px 10px;
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    box-shadow: var(--shadow);
+    z-index: 1000;
+    white-space: nowrap;
+}
+
+.tooltip.visible {
+    opacity: 1;
+}
+
+
 
 /* ========================================
    Filepicker-specific Styles

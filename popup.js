@@ -496,6 +496,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loadStoredFile();
       }
     });
+
+    setupTooltips();
   }
 
   // ==================
@@ -1019,4 +1021,98 @@ document.addEventListener('DOMContentLoaded', () => {
       elements.sendBtn.disabled = false;
     }
   }
+  function setupTooltips() {
+    const tooltip = document.getElementById('tooltip');
+    let activeElement = null;
+    let tooltipTimeout = null;
+
+    document.addEventListener('mouseover', (e) => {
+      // Find closest element with a title attribute or data-tooltip
+      const target = e.target.closest('[title], [data-tooltip]');
+
+      // If we are already tracking this element, do nothing (prevents timer reset on mouse move inside element)
+      if (activeElement && target === activeElement) {
+        return;
+      }
+
+      // If we moved to a new element (or no element), clear any pending tooltip
+      if (activeElement) {
+        clearTimeout(tooltipTimeout);
+        hideTooltip();
+      }
+
+      if (!target) {
+        return;
+      }
+
+      // If it has a title, move it to data-tooltip to suppress native tooltip
+      if (target.hasAttribute('title')) {
+        const title = target.getAttribute('title');
+        target.setAttribute('data-tooltip', title);
+        target.removeAttribute('title');
+      }
+
+      const text = target.getAttribute('data-tooltip');
+      if (!text) return;
+
+      activeElement = target;
+
+      // Delay showing the tooltip
+      tooltipTimeout = setTimeout(() => {
+        // Double-check we are still active on this element
+        if (activeElement === target) {
+          showTooltip(target, text);
+        }
+      }, 1000); // 1000ms delay
+    });
+
+    document.addEventListener('mouseout', (e) => {
+      if (activeElement && (e.target === activeElement || e.target.closest('[data-tooltip]') === activeElement)) {
+        // check if we moved to child of the active element
+        if (e.relatedTarget && activeElement.contains(e.relatedTarget)) {
+          return;
+        }
+
+        // otherwise, we left the element entirely
+        clearTimeout(tooltipTimeout);
+        hideTooltip();
+      }
+    });
+
+    function showTooltip(element, text) {
+      if (!element.isConnected) return; // Verify element is still in DOM
+
+      tooltip.textContent = text;
+      tooltip.classList.add('visible');
+
+      const rect = element.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const margin = 8;
+
+      // Default: Top center
+      let top = rect.top - tooltipRect.height - margin;
+      let left = rect.left + (rect.width - tooltipRect.width) / 2;
+
+      // prevent overflow top
+      if (top < 0) {
+        top = rect.bottom + margin;
+      }
+
+      // prevent overflow left/right
+      if (left < margin) {
+        left = margin;
+      } else if (left + tooltipRect.width > window.innerWidth - margin) {
+        left = window.innerWidth - tooltipRect.width - margin;
+      }
+
+      tooltip.style.top = `${top}px`;
+      tooltip.style.left = `${left}px`;
+    }
+
+    function hideTooltip() {
+      tooltip.classList.remove('visible');
+      activeElement = null;
+    }
+  }
+
 });
