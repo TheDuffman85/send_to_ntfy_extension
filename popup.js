@@ -363,16 +363,14 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedPriority = draft.priority;
             updatePriorityUI();
           }
-          // Topic restoration might need to wait for topics to load, 
-          // but loadConfig runs before this so topics should be populated if they exist in config.
-          // However, if topic was manually selected and differs? 
-          // Actually topicSelect is populated from config. 
-          // We should just set the value.
           if (draft.topic) {
             elements.topicSelect.value = draft.topic;
             elements.topicDropdownText.textContent = draft.topic;
             updateCustomDropdownSelection(draft.topic);
           }
+
+          // Clear draft state after restoration to prevent stale state from overwriting future sessions
+          chrome.storage.local.remove(['draftState']);
         }
         resolve();
       });
