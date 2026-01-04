@@ -2,7 +2,7 @@
 
 [![Build Extension](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml/badge.svg)](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml)
 
-A simple yet powerful browser extension to send the current URL or custom text to [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
+A browser extension to send the notifications to [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
 
 ## Features
 
@@ -44,13 +44,21 @@ Access the extension settings to configure your preferences:
 To build the extension locally:
 
 ```bash
-# Install dependencies
-npm install
+# Build for all browsers (Chrome, Firefox, Edge)
+./build.sh
 
-# Build the project
-npm run build
+# Or build for a specific browser
+./build.sh chrome
+./build.sh firefox
+./build.sh edge
 ```
 
-## Preview
+The build output will be placed in the `build/` directory.
 
-![Screenshot](https://github.com/TheDuffman85/send_to_ntfy_extension/assets/9296618/a87f1c2b-b7d4-4d5a-8f38-60436871abe6)
+## Screenshots
+
+<p align="left">
+  <img src="screenshots/1.png" width="280" alt="Main view"><br><br>
+  <img src="screenshots/2.png" width="280" alt="Settings view"><br><br>
+  <img src="screenshots/3.png" width="280" alt="Dark mode">
+</p>
