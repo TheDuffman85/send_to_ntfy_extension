@@ -3,9 +3,6 @@
 # Create build directory
 mkdir -p build
 
-# Create build directory
-mkdir -p build
-
 target=$1
 
 # File list to package
@@ -19,31 +16,21 @@ build_chrome() {
 }
 
 build_firefox() {
-  rm -f build/send-to-ntfy-firefox.zip
+  rm -f build/send-to-ntfy-firefox.xpi
   echo "Building for Firefox..."
-  zip -r build/send-to-ntfy-firefox.zip $FILES
-  echo "Firefox build created at build/send-to-ntfy-firefox.zip"
-}
-
-build_edge() {
-  rm -f build/send-to-ntfy-edge.zip
-  echo "Building for Edge..."
-  zip -r build/send-to-ntfy-edge.zip $FILES
-  echo "Edge build created at build/send-to-ntfy-edge.zip"
+  zip -r build/send-to-ntfy-firefox.xpi $FILES
+  echo "Firefox build created at build/send-to-ntfy-firefox.xpi"
 }
 
 if [ -z "$target" ]; then
   build_chrome
   build_firefox
-  build_edge
 elif [ "$target" == "chrome" ]; then
   build_chrome
 elif [ "$target" == "firefox" ]; then
   build_firefox
-elif [ "$target" == "edge" ]; then
-  build_edge
 else
-  echo "Usage: ./build.sh [chrome|firefox|edge]"
+  echo "Usage: ./build.sh [chrome|firefox]"
   exit 1
 fi
 
