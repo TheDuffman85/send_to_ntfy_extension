@@ -46,19 +46,19 @@ async function updateContextMenu() {
 
         chrome.contextMenus.create({
             id: SEND_SELECTION_ID,
-            title: `Send to ntfy (${topic})`,
+            title: `Text (${topic})`,
             contexts: ['selection']
         });
 
         chrome.contextMenus.create({
             id: SEND_IMAGE_ID,
-            title: `Send to ntfy (${topic})`,
+            title: `Image (${topic})`,
             contexts: ['image']
         });
 
         chrome.contextMenus.create({
             id: SEND_PAGE_ID,
-            title: `Send to ntfy (${topic})`,
+            title: `Link (${topic})`,
             contexts: ['page', 'link']
         });
     } else {
@@ -67,7 +67,7 @@ async function updateContextMenu() {
         // Selection context
         chrome.contextMenus.create({
             id: `${PARENT_MENU_ID}-selection`,
-            title: 'Send to ntfy',
+            title: 'Text',
             contexts: ['selection']
         });
 
@@ -83,7 +83,7 @@ async function updateContextMenu() {
         // Image context
         chrome.contextMenus.create({
             id: `${PARENT_MENU_ID}-image`,
-            title: 'Send to ntfy',
+            title: 'Image',
             contexts: ['image']
         });
 
@@ -99,7 +99,7 @@ async function updateContextMenu() {
         // Page context
         chrome.contextMenus.create({
             id: `${PARENT_MENU_ID}-page`,
-            title: 'Send to ntfy',
+            title: 'Link',
             contexts: ['page', 'link']
         });
 
