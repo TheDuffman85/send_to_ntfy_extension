@@ -38,7 +38,7 @@ jobs:
           
           # Copy all extension files
           cp -r icons fonts build/chrome/
-          cp popup.html popup.js filepicker.html filepicker.js styles.css build/chrome/
+          cp popup.html popup.js filepicker.html filepicker.js background.js ntfy.js styles.css build/chrome/
           
           # Create Chrome-specific manifest (remove Firefox-specific settings)
           jq 'del(.browser_specific_settings)' manifest.json > build/chrome/manifest.json
@@ -56,7 +56,7 @@ jobs:
           
           # Copy all extension files
           cp -r icons fonts build/firefox/
-          cp popup.html popup.js filepicker.html filepicker.js styles.css build/firefox/
+          cp popup.html popup.js filepicker.html filepicker.js background.js ntfy.js styles.css build/firefox/
           
           # Firefox uses the manifest as-is (includes browser_specific_settings)
           cp manifest.json build/firefox/

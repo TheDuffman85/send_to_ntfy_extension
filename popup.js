@@ -97,6 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
     applyTheme();
     // Render initial empty tags or restored ones
     renderTags();
+    // Set focus on message input when popup opens
+    elements.messageInput.focus();
   }
 
   // ==================
@@ -955,79 +957,55 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.sendBtn.disabled = true;
 
     try {
-      const urlObj = new URL(config.apiUrl);
-      const fullUrl = `${urlObj.origin}/${topic}`;
+      const apiConfig = {
+        apiUrl: config.apiUrl,
+        accessToken: config.accessToken
+      };
 
-      const headers = new Headers();
-
-      if (urlObj.username && urlObj.password) {
-        headers.set('Authorization', `Basic ${btoa(`${urlObj.username}:${urlObj.password}`)}`);
-      }
-      if (config.accessToken) {
-        headers.set('Authorization', `Bearer ${config.accessToken}`);
-      }
-
-      if (title) {
-        headers.set('X-Title', title);
-      }
-
-      if (selectedPriority !== 3) {
-        headers.set('X-Priority', selectedPriority.toString());
-      }
-
-      if (tagsString) {
-        headers.set('X-Tags', tagsString);
-      }
-
-      let body;
+      let response;
 
       if (storedFile) {
-        headers.set('X-Filename', storedFile.name);
-        if (message) {
-          headers.set('X-Message', message);
-        }
-
+        // Send file as attachment using NtfyAPI
         const base64 = storedFile.data.split(',')[1];
         const binaryString = atob(base64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        body = bytes.buffer;
+
+        response = await NtfyAPI.sendAttachment(apiConfig, topic, {
+          data: bytes.buffer,
+          filename: storedFile.name,
+          message: message,
+          title: title,
+          priority: selectedPriority,
+          tags: tagsString
+        });
       } else {
-        body = message;
+        // Send text notification using NtfyAPI
+        response = await NtfyAPI.sendNotification(apiConfig, topic, {
+          message: message,
+          title: title,
+          priority: selectedPriority,
+          tags: tagsString
+        });
       }
 
-      const response = await fetch(fullUrl, {
-        method: 'POST',
-        headers,
-        body
-      });
+      elements.messageInput.value = '';
+      elements.titleInput.value = '';
 
-      if (response.ok) {
-        elements.messageInput.value = '';
-        elements.titleInput.value = '';
-        // tags = []; // Keep last used tags
-        // renderTags();
+      await removeFile();
+      // Clear any saved draft state so it doesn't overwrite preferences next time
+      await new Promise(resolve => chrome.storage.local.remove(['draftState'], resolve));
 
+      updatePriorityUI();
 
-        await removeFile();
-        // Clear any saved draft state so it doesn't overwrite preferences next time
-        await new Promise(resolve => chrome.storage.local.remove(['draftState'], resolve));
-
-        // selectedPriority = 3; // Keep last used priority
-        updatePriorityUI();
-
-        // Close the popup unless "Send another" is checked
-        if (!elements.sendAnotherCheckbox.checked) {
-          setTimeout(() => window.close(), 100);
-        } else {
-          // Only show success message if staying open
-          showStatus('Notification sent!', 'success');
-        }
+      // Close the popup unless "Send another" is checked
+      if (!elements.sendAnotherCheckbox.checked) {
+        setTimeout(() => window.close(), 100);
       } else {
-        const errorText = await response.text();
-        showStatus(`Failed: ${response.status} ${errorText.slice(0, 50)}`, 'error');
+        // Only show success message if staying open
+        showStatus('Notification sent!', 'success');
       }
     } catch (error) {
       showStatus(`Error: ${error.message}`, 'error');
