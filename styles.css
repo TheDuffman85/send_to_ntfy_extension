@@ -326,6 +326,8 @@ body {
     color: var(--text-secondary);
     margin-top: 4px;
     padding-bottom: 6px;
+    font-style: italic;
+    opacity: 0.8;
 }
 
 /* ========================================
