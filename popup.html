@@ -82,68 +82,68 @@
         <label class="form-label" for="message-input">Message</label>
       </div>
       <textarea class="form-textarea" id="message-input" rows="3"></textarea>
-    </div>
 
-    <!-- File Attachment -->
-    <div class="file-section">
-      <div class="file-input-wrapper">
-        <input type="file" class="file-input" id="file-input">
-        <button class="file-btn" id="file-btn">
-          📎 Attach file
-        </button>
-      </div>
-      <div class="file-preview" id="file-preview">
-        <span class="file-icon">📄</span>
-        <div class="file-info">
-          <div class="file-name" id="file-name"></div>
-          <div class="file-size" id="file-size"></div>
+
+      <!-- File Attachment -->
+      <div class="file-section">
+        <div class="file-input-wrapper">
+          <input type="file" class="file-input" id="file-input">
+          <button class="file-btn" id="file-btn">
+            📎 Attach file
+          </button>
         </div>
-        <button class="file-remove" id="file-remove" title="Remove file">×</button>
-      </div>
-    </div>
-
-    <!-- Advanced Options Toggle -->
-    <div class="advanced-toggle" id="advanced-toggle">
-      <span class="arrow">▶</span>
-      Advanced options
-    </div>
-
-    <!-- Advanced Options -->
-    <div class="advanced-options" id="advanced-options">
-      <!-- Priority -->
-      <div class="form-group">
-        <label class="form-label">Priority</label>
-        <div class="chips" id="priority-chips">
-          <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
-          <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
-          <button class="chip active" data-priority="3">Default</button>
-          <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
-          <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
+        <div class="file-preview" id="file-preview">
+          <span class="file-icon">📄</span>
+          <div class="file-info">
+            <div class="file-name" id="file-name"></div>
+            <div class="file-size" id="file-size"></div>
+          </div>
+          <button class="file-remove" id="file-remove" title="Remove file">×</button>
         </div>
       </div>
 
-      <!-- Tags -->
-      <div class="form-group">
-        <label class="form-label">Tags</label>
-        <div class="tags-container" id="tags-container">
-          <input type="text" class="tag-input-field" id="new-tag-input">
-          <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
+      <!-- Advanced Options Toggle -->
+      <div class="advanced-toggle" id="advanced-toggle">
+        <span class="arrow">▶</span>
+        Advanced options
+      </div>
+
+      <!-- Advanced Options -->
+      <div class="advanced-options" id="advanced-options">
+        <!-- Priority -->
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <div class="chips" id="priority-chips">
+            <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
+            <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
+            <button class="chip active" data-priority="3">Default</button>
+            <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
+            <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
+          </div>
+        </div>
+
+        <!-- Tags -->
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div class="tags-container" id="tags-container">
+            <input type="text" class="tag-input-field" id="new-tag-input">
+            <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Send Footer -->
-    <div class="send-footer">
-      <div class="send-another-group">
-        <input type="checkbox" id="send-another-checkbox">
-        <label for="send-another-checkbox">Send another</label>
+      <!-- Send Footer -->
+      <div class="send-footer">
+        <div class="send-another-group">
+          <input type="checkbox" id="send-another-checkbox">
+          <label for="send-another-checkbox">Send another</label>
+        </div>
+        <button class="send-btn" id="send-btn">Send</button>
       </div>
-      <button class="send-btn" id="send-btn">Send</button>
-    </div>
 
-    <!-- Status Message -->
-    <div class="status" id="status"></div>
-  </div>
+      <!-- Status Message -->
+      <div class="status" id="status"></div>
+    </div>
   </div>
 
   <!-- Settings View -->
