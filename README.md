@@ -1,8 +1,11 @@
-# Send to ntfy
+# <img src="icons/icon48.png" alt="Logo" width="40" height="40" style="vertical-align: middle;"> Send to ntfy
 
 [![Build Extension](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml/badge.svg)](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml)
 
 A browser extension to send the notifications to [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
+
+> [!NOTE]
+> This is an unofficial extension and is not affiliated with the ntfy.sh project.
 
 ## Features
 
@@ -50,9 +53,8 @@ To build the extension locally:
 ./build.sh
 
 # Or build for a specific browser
-./build.sh chrome
+./build.sh chrome # (includes Chromium based browsers like Edge)
 ./build.sh firefox
-./build.sh edge
 ```
 
 The build output will be placed in the `build/` directory.
