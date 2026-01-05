@@ -74,7 +74,7 @@
       <!-- Title (Optional) -->
       <div class="form-group">
         <label class="form-label" for="title-input">Title</label>
-        <input type="text" class="form-input" id="title-input" placeholder="Notification title...">
+        <input type="text" class="form-input" id="title-input">
       </div>
 
       <!-- Message -->
@@ -85,7 +85,7 @@
             🔗 Insert URL
           </button>
         </div>
-        <textarea class="form-textarea" id="message-input" placeholder="Your message..." rows="3"></textarea>
+        <textarea class="form-textarea" id="message-input" rows="3"></textarea>
       </div>
 
       <!-- File Attachment -->
@@ -154,8 +154,6 @@
     <div class="main-content">
 
 
-
-
       <div class="form-group">
         <label class="form-label" for="url-input">Server URL</label>
         <input type="text" class="form-input" id="url-input" placeholder="https://ntfy.sh">
@@ -168,23 +166,15 @@
         <p class="form-hint">For private topics or authenticated servers</p>
       </div>
 
-      <div class="divider"></div>
-
-      <div class="form-label">Topics</div>
-
       <div class="form-group">
-
+        <div class="form-label">Topics</div>
         <div class="topics-container" id="topics-container">
           <input type="text" class="topic-input-field" id="new-topic-input" placeholder="Press enter to add topic">
         </div>
       </div>
 
-
-
-      <div class="divider"></div>
-
-      <div class="form-label">Appearance</div>
       <div class="form-group">
+        <div class="form-label">Appearance</div>
         <div class="chips" id="theme-chips">
           <button class="chip" data-theme="light">☀️ Light</button>
           <button class="chip" data-theme="dark">🌙 Dark</button>

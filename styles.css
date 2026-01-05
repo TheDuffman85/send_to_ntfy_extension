@@ -796,11 +796,7 @@ body {
     cursor: pointer;
 }
 
-.divider {
-    height: 1px;
-    background-color: var(--border-color);
-    margin: 16px 0;
-}
+
 
 /* ========================================
    Tooltip
