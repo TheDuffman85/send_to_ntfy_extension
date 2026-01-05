@@ -59,7 +59,7 @@ async function updateContextMenu() {
         chrome.contextMenus.create({
             id: SEND_PAGE_ID,
             title: `Send to ntfy (${topic})`,
-            contexts: ['page']
+            contexts: ['page', 'link']
         });
     } else {
         // Multiple topics: create parent menu with submenu
@@ -100,7 +100,7 @@ async function updateContextMenu() {
         chrome.contextMenus.create({
             id: `${PARENT_MENU_ID}-page`,
             title: 'Send to ntfy',
-            contexts: ['page']
+            contexts: ['page', 'link']
         });
 
         topics.forEach((topic, index) => {
@@ -108,7 +108,7 @@ async function updateContextMenu() {
                 id: `${SEND_PAGE_ID}-${index}`,
                 parentId: `${PARENT_MENU_ID}-page`,
                 title: topic,
-                contexts: ['page']
+                contexts: ['page', 'link']
             });
         });
     }
@@ -181,10 +181,44 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl);
             showBadge('✓', '#4CAF50');
         } else if (menuId === SEND_PAGE_ID || menuId.startsWith(SEND_PAGE_ID)) {
-            // Send page URL
+            // Send page URL or link URL
+            const urlToSend = info.linkUrl || tab.url;
+            let titleToSend = '';
+
+            if (info.linkUrl) {
+                // Try to get link text from the page
+                try {
+                    const results = await chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        func: (targetUrl) => {
+                            // Find the link element that matches the URL
+                            // We use .href because it returns the absolute URL, matching targetUrl
+                            const links = document.querySelectorAll('a');
+                            for (const link of links) {
+                                if (link.href === targetUrl) {
+                                    return link.innerText || link.textContent || '';
+                                }
+                            }
+                            return '';
+                        },
+                        args: [info.linkUrl]
+                    });
+
+                    if (results && results[0] && results[0].result) {
+                        titleToSend = results[0].result.trim();
+                    }
+                } catch (e) {
+                    console.error('Failed to retrieve link text:', e);
+                    // Fallback to empty title or maybe URL? User asked for link text as title.
+                    // If failed, we just leave it empty.
+                }
+            } else {
+                titleToSend = tab.title;
+            }
+
             await NtfyAPI.sendNotification(config, topic, {
-                message: tab.url,
-                title: tab.title
+                message: urlToSend,
+                title: titleToSend
             });
             showBadge('✓', '#4CAF50');
         }

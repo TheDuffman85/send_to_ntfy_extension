@@ -587,26 +587,7 @@ body {
     color: #e53935;
 }
 
-/* Insert URL Button */
-.insert-url-btn {
-    padding: 4px 10px;
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--primary);
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
 
-.insert-url-btn:hover {
-    background-color: rgba(51, 133, 116, 0.1);
-}
-
-.insert-url-btn:active {
-    background-color: rgba(51, 133, 116, 0.2);
-}
 
 /* ========================================
    Chips (Priority & Theme)

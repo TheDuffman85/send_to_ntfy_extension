@@ -57,8 +57,6 @@ document.addEventListener('DOMContentLoaded', () => {
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
     topicInputHint: document.getElementById('topic-input-hint'),
-
-    insertUrlBtn: document.getElementById('insert-url-btn'),
   };
 
   // State
@@ -447,9 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.newTopicInput.addEventListener('input', updateTopicInputHint);
     elements.topicsContainer.addEventListener('click', handleTopicRemove);
 
-    // Insert URL button
-    elements.insertUrlBtn.addEventListener('click', insertCurrentUrl);
-
     // Theme chips
     elements.themeChips.addEventListener('click', (e) => {
       handleThemeChange(e);
@@ -639,25 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function insertCurrentUrl() {
-    if (config.pageUrl) {
-      // Insert at cursor position or append
-      const textarea = elements.messageInput;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const text = textarea.value;
 
-      if (text) {
-        // Insert at cursor position
-        textarea.value = text.substring(0, start) + config.pageUrl + text.substring(end);
-        textarea.selectionStart = textarea.selectionEnd = start + config.pageUrl.length;
-      } else {
-        // Empty field, just set the value
-        textarea.value = config.pageUrl;
-      }
-      textarea.focus();
-    }
-  }
 
   function showStatus(message, type) {
     elements.status.textContent = message;
