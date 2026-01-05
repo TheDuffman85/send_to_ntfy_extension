@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let selectedPriority = 3;
   let isSettingsView = false;
+  let rightCtrlDown = false;
 
   const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled'];
 
@@ -501,6 +502,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     setupTooltips();
+
+    // Global keyboard shortcuts
+    document.addEventListener('keydown', handleGlobalKeydown);
+    document.addEventListener('keyup', handleGlobalKeyup);
+    window.addEventListener('blur', () => {
+      rightCtrlDown = false;
+    });
   }
 
   // ==================
@@ -1104,6 +1112,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideTooltip() {
       tooltip.classList.remove('visible');
       activeElement = null;
+    }
+  }
+
+  // ==================
+  // Keyboard Shortcuts
+  // ==================
+
+  function handleGlobalKeydown(e) {
+    if (e.code === 'ControlRight') {
+      rightCtrlDown = true;
+    }
+
+    if (e.key === 'Enter' && rightCtrlDown) {
+      // Check if send button is visible and enabled
+      // offsetParent is null if element or any parent is hidden (display: none)
+      if (elements.sendBtn.offsetParent !== null && !elements.sendBtn.disabled) {
+        e.preventDefault();
+        elements.sendBtn.click();
+      }
+    }
+  }
+
+  function handleGlobalKeyup(e) {
+    if (e.code === 'ControlRight') {
+      rightCtrlDown = false;
     }
   }
 

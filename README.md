@@ -9,6 +9,7 @@ A browser extension to send the notifications to [ntfy.sh](https://ntfy.sh) or y
 - **Context Menu**: Right-click to send selected text, images, or the current page URL directly to ntfy.
 - **File Upload**: Easily upload and send files to your ntfy topics.
 - **Quick Sharing**: Send the current page URL or custom text to your ntfy topics.
+- **Keyboard Shortcuts**: Send messages quickly with `Right Ctrl + Enter`.
 - **Custom Configuration**: Support for self-hosted ntfy servers.
 - **Authentication**: Optional support for token-based authentication.
 - **Privacy First**: No tracking, just simple functionality.
