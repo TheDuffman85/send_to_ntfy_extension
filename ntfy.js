@@ -53,18 +53,46 @@ const NtfyAPI = {
      * @param {string} [options.tags] - Optional comma-separated tags
      * @returns {Promise<Response>}
      */
+    /**
+     * Encode header value using RFC 2047 if it contains non-ASCII characters
+     * @param {string} value - Header value to check and encode
+     * @returns {string}
+     */
+    encodeHeaderValue(value) {
+        if (!value) return '';
+        // Check for non-ASCII characters
+        if (/[^\x00-\x7F]/.test(value)) {
+            // Encode using RFC 2047: =?utf-8?B?base64_encoded_value?=
+            // btoa(unescape(encodeURIComponent(value))) is the robust way to b64 encode utf8 strings in browser
+            const encoded = btoa(unescape(encodeURIComponent(value)));
+            return `=?utf-8?B?${encoded}?=`;
+        }
+        return value;
+    },
+
+    /**
+     * Send a text notification
+     * @param {Object} config - Configuration object with apiUrl and accessToken
+     * @param {string} topic - Topic to send to
+     * @param {Object} options - Notification options
+     * @param {string} [options.message] - Message body
+     * @param {string} [options.title] - Optional title
+     * @param {number} [options.priority] - Optional priority (1-5, default 3)
+     * @param {string} [options.tags] - Optional comma-separated tags
+     * @returns {Promise<Response>}
+     */
     async sendNotification(config, topic, { message, title, priority, tags }) {
         const fullUrl = this.buildTopicUrl(config.apiUrl, topic);
         const headers = this.buildAuthHeaders(config.accessToken);
 
         if (title) {
-            headers.set('X-Title', title);
+            headers.set('X-Title', this.encodeHeaderValue(title));
         }
         if (priority && priority !== 3) {
             headers.set('X-Priority', priority.toString());
         }
         if (tags) {
-            headers.set('X-Tags', tags);
+            headers.set('X-Tags', this.encodeHeaderValue(tags));
         }
 
         const response = await fetch(fullUrl, {
@@ -97,19 +125,19 @@ const NtfyAPI = {
         const fullUrl = this.buildTopicUrl(config.apiUrl, topic);
         const headers = this.buildAuthHeaders(config.accessToken);
 
-        headers.set('X-Filename', filename);
+        headers.set('X-Filename', this.encodeHeaderValue(filename));
 
         if (message) {
-            headers.set('X-Message', message);
+            headers.set('X-Message', this.encodeHeaderValue(message));
         }
         if (title) {
-            headers.set('X-Title', title);
+            headers.set('X-Title', this.encodeHeaderValue(title));
         }
         if (priority && priority !== 3) {
             headers.set('X-Priority', priority.toString());
         }
         if (tags) {
-            headers.set('X-Tags', tags);
+            headers.set('X-Tags', this.encodeHeaderValue(tags));
         }
 
         const response = await fetch(fullUrl, {

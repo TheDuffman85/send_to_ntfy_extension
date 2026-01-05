@@ -1,8 +1,10 @@
 // Background service worker for context menu integration
 // Compatible with Chrome, Edge, and Firefox 142+
 
-// Import shared utilities
-importScripts('ntfy.js');
+// Import shared utilities (only in Service Worker context)
+if (typeof importScripts === 'function') {
+    importScripts('ntfy.js');
+}
 
 const PARENT_MENU_ID = 'ntfy-parent';
 const SEND_SELECTION_ID = 'ntfy-send-selection';
@@ -114,6 +116,32 @@ async function updateContextMenu() {
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    let menuId = info.menuItemId;
+
+    // Check if we need to request permission for an image
+    if ((menuId === SEND_IMAGE_ID || menuId.startsWith(SEND_IMAGE_ID + '-')) && info.srcUrl) {
+        if (info.srcUrl.startsWith('http')) {
+            const imgUrlObj = new URL(info.srcUrl);
+            const origin = imgUrlObj.origin + '/*';
+
+            try {
+                // Request permission immediately while we have the user gesture
+                // We don't check permissions.contains first because that is async and will kill the user gesture
+                const granted = await new Promise(resolve => {
+                    chrome.permissions.request({ origins: [origin] }, resolve);
+                });
+
+                if (!granted) {
+                    console.error('Permission denied to access image origin');
+                    return;
+                }
+            } catch (e) {
+                console.error('Failed to request permission:', e);
+                // Continue anyway, it might fail later in fetch but we tried
+            }
+        }
+    }
+
     const config = await NtfyAPI.getConfig();
     const topics = config.topics;
 
@@ -123,7 +151,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 
     let topic;
-    let menuId = info.menuItemId;
 
     // Determine which topic was selected
     if (topics.length === 1) {

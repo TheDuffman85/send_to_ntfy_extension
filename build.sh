@@ -11,14 +11,36 @@ FILES="manifest.json popup.html popup.js filepicker.html filepicker.js backgroun
 build_chrome() {
   rm -f build/send-to-ntfy-chrome.zip
   echo "Building for Chrome..."
-  zip -r build/send-to-ntfy-chrome.zip $FILES
+  
+  # Create temp config
+  TEMP_DIR=$(mktemp -d)
+  cp -r $FILES "$TEMP_DIR/"
+  
+  # create manifest
+  node build-manifest.js chrome > "$TEMP_DIR/manifest.json"
+  
+  # zip
+  (cd "$TEMP_DIR" && zip -r "$OLDPWD/build/send-to-ntfy-chrome.zip" .)
+  
+  rm -rf "$TEMP_DIR"
   echo "Chrome build created at build/send-to-ntfy-chrome.zip"
 }
 
 build_firefox() {
   rm -f build/send-to-ntfy-firefox.xpi
   echo "Building for Firefox..."
-  zip -r build/send-to-ntfy-firefox.xpi $FILES
+  
+  # Create temp config
+  TEMP_DIR=$(mktemp -d)
+  cp -r $FILES "$TEMP_DIR/"
+  
+  # create manifest
+  node build-manifest.js firefox > "$TEMP_DIR/manifest.json"
+  
+  # zip
+  (cd "$TEMP_DIR" && zip -r "$OLDPWD/build/send-to-ntfy-firefox.xpi" .)
+  
+  rm -rf "$TEMP_DIR"
   echo "Firefox build created at build/send-to-ntfy-firefox.xpi"
 }
 

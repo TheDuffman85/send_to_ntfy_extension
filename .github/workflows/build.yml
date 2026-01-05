@@ -41,7 +41,7 @@ jobs:
           cp popup.html popup.js filepicker.html filepicker.js background.js ntfy.js styles.css build/chrome/
           
           # Create Chrome-specific manifest (remove Firefox-specific settings)
-          jq 'del(.browser_specific_settings)' manifest.json > build/chrome/manifest.json
+          node build-manifest.js chrome > build/chrome/manifest.json
           
           # Create ZIP for Chrome Web Store / Edge Add-ons
           cd build/chrome
@@ -58,8 +58,8 @@ jobs:
           cp -r icons fonts build/firefox/
           cp popup.html popup.js filepicker.html filepicker.js background.js ntfy.js styles.css build/firefox/
           
-          # Firefox uses the manifest as-is (includes browser_specific_settings)
-          cp manifest.json build/firefox/
+          # Create Firefox-specific manifest (uses scripts instead of service_worker)
+          node build-manifest.js firefox > build/firefox/manifest.json
           
           # Create XPI for Firefox (it's just a ZIP with .xpi extension)
           cd build/firefox
