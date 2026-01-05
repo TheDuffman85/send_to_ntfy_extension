@@ -9,7 +9,8 @@ if (typeof importScripts === 'function') {
 const PARENT_MENU_ID = 'ntfy-parent';
 const SEND_SELECTION_ID = 'ntfy-send-selection';
 const SEND_IMAGE_ID = 'ntfy-send-image';
-const SEND_PAGE_ID = 'ntfy-send-page';
+const SEND_LINK_ID = 'ntfy-send-link'; // Replaced SEND_PAGE_ID
+const SEND_TAB_ID = 'ntfy-send-tab';
 
 // Initialize context menu on install and startup
 chrome.runtime.onInstalled.addListener(() => {
@@ -40,33 +41,72 @@ async function updateContextMenu() {
         return;
     }
 
+    // Create a single parent menu "Send to ntfy" for ALL contexts
+    chrome.contextMenus.create({
+        id: PARENT_MENU_ID,
+        title: 'Send to ntfy',
+        contexts: ['all']
+    });
+
     if (topics.length === 1) {
-        // Single topic: direct menu items
+        // Single topic: Text/Image/Link are direct clickable items under the parent
         const topic = topics[0];
 
+        // 1. Page (Tab) - Always visible
+        chrome.contextMenus.create({
+            id: SEND_TAB_ID,
+            parentId: PARENT_MENU_ID,
+            title: `Page (${topic})`,
+            contexts: ['all']
+        });
+
+        // 2. Text - Selection only
         chrome.contextMenus.create({
             id: SEND_SELECTION_ID,
+            parentId: PARENT_MENU_ID,
             title: `Text (${topic})`,
             contexts: ['selection']
         });
 
+        // 3. Image - Image only
         chrome.contextMenus.create({
             id: SEND_IMAGE_ID,
+            parentId: PARENT_MENU_ID,
             title: `Image (${topic})`,
             contexts: ['image']
         });
 
+        // 4. Link - Link only
         chrome.contextMenus.create({
-            id: SEND_PAGE_ID,
+            id: SEND_LINK_ID,
+            parentId: PARENT_MENU_ID,
             title: `Link (${topic})`,
-            contexts: ['page', 'link']
+            contexts: ['link']
         });
     } else {
-        // Multiple topics: create parent menu with submenu
+        // Multiple topics: Text/Image/Link are submenus containing topics
 
-        // Selection context
+        // 1. Page (Tab) Submenu
+        chrome.contextMenus.create({
+            id: `${PARENT_MENU_ID}-tab`,
+            parentId: PARENT_MENU_ID,
+            title: 'Page',
+            contexts: ['all']
+        });
+
+        topics.forEach((topic, index) => {
+            chrome.contextMenus.create({
+                id: `${SEND_TAB_ID}-${index}`,
+                parentId: `${PARENT_MENU_ID}-tab`,
+                title: topic,
+                contexts: ['all']
+            });
+        });
+
+        // 2. Text Submenu
         chrome.contextMenus.create({
             id: `${PARENT_MENU_ID}-selection`,
+            parentId: PARENT_MENU_ID,
             title: 'Text',
             contexts: ['selection']
         });
@@ -80,9 +120,10 @@ async function updateContextMenu() {
             });
         });
 
-        // Image context
+        // 3. Image Submenu
         chrome.contextMenus.create({
             id: `${PARENT_MENU_ID}-image`,
+            parentId: PARENT_MENU_ID,
             title: 'Image',
             contexts: ['image']
         });
@@ -96,19 +137,20 @@ async function updateContextMenu() {
             });
         });
 
-        // Page context
+        // 4. Link Submenu
         chrome.contextMenus.create({
-            id: `${PARENT_MENU_ID}-page`,
+            id: `${PARENT_MENU_ID}-link`,
+            parentId: PARENT_MENU_ID,
             title: 'Link',
-            contexts: ['page', 'link']
+            contexts: ['link']
         });
 
         topics.forEach((topic, index) => {
             chrome.contextMenus.create({
-                id: `${SEND_PAGE_ID}-${index}`,
-                parentId: `${PARENT_MENU_ID}-page`,
+                id: `${SEND_LINK_ID}-${index}`,
+                parentId: `${PARENT_MENU_ID}-link`,
                 title: topic,
-                contexts: ['page', 'link']
+                contexts: ['link']
             });
         });
     }
@@ -180,45 +222,46 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             // Send image
             await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl);
             showBadge('✓', '#4CAF50');
-        } else if (menuId === SEND_PAGE_ID || menuId.startsWith(SEND_PAGE_ID)) {
-            // Send page URL or link URL
-            const urlToSend = info.linkUrl || tab.url;
+        } else if (menuId === SEND_LINK_ID || menuId.startsWith(SEND_LINK_ID)) {
+            // Send link URL
+            const urlToSend = info.linkUrl;
             let titleToSend = '';
 
-            if (info.linkUrl) {
-                // Try to get link text from the page
-                try {
-                    const results = await chrome.scripting.executeScript({
-                        target: { tabId: tab.id },
-                        func: (targetUrl) => {
-                            // Find the link element that matches the URL
-                            // We use .href because it returns the absolute URL, matching targetUrl
-                            const links = document.querySelectorAll('a');
-                            for (const link of links) {
-                                if (link.href === targetUrl) {
-                                    return link.innerText || link.textContent || '';
-                                }
+            // Try to get link text from the page
+            try {
+                const results = await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: (targetUrl) => {
+                        // Find the link element that matches the URL
+                        // We use .href because it returns the absolute URL, matching targetUrl
+                        const links = document.querySelectorAll('a');
+                        for (const link of links) {
+                            if (link.href === targetUrl) {
+                                return link.innerText || link.textContent || '';
                             }
-                            return '';
-                        },
-                        args: [info.linkUrl]
-                    });
+                        }
+                        return '';
+                    },
+                    args: [info.linkUrl]
+                });
 
-                    if (results && results[0] && results[0].result) {
-                        titleToSend = results[0].result.trim();
-                    }
-                } catch (e) {
-                    console.error('Failed to retrieve link text:', e);
-                    // Fallback to empty title or maybe URL? User asked for link text as title.
-                    // If failed, we just leave it empty.
+                if (results && results[0] && results[0].result) {
+                    titleToSend = results[0].result.trim();
                 }
-            } else {
-                titleToSend = tab.title;
+            } catch (e) {
+                console.error('Failed to retrieve link text:', e);
             }
 
             await NtfyAPI.sendNotification(config, topic, {
                 message: urlToSend,
                 title: titleToSend
+            });
+            showBadge('✓', '#4CAF50');
+        } else if (menuId === SEND_TAB_ID || menuId.startsWith(SEND_TAB_ID)) {
+            // Send current page (tab) URL
+            await NtfyAPI.sendNotification(config, topic, {
+                message: tab.url,
+                title: tab.title
             });
             showBadge('✓', '#4CAF50');
         }
