@@ -287,12 +287,28 @@ body {
 }
 
 .form-input::placeholder,
-.form-textarea::placeholder,
-.topic-input-field::placeholder,
-.tag-input-field::placeholder {
+.form-textarea::placeholder {
     font-size: 11px;
     font-style: italic;
     color: var(--text-secondary);
+}
+
+/* Tag/Topic input hint: hidden by default, shown when user has input */
+.tag-input-hint,
+.topic-input-hint {
+    display: none;
+    font-size: 11px;
+    font-style: italic;
+    color: var(--text-secondary);
+    pointer-events: none;
+    white-space: nowrap;
+    flex-basis: 100%;
+    text-align: right;
+}
+
+.tag-input-hint.visible,
+.topic-input-hint.visible {
+    display: block;
 }
 
 .form-textarea {
@@ -479,9 +495,14 @@ body {
     background: transparent;
     padding: 4px 0;
     flex: 1;
-    min-width: 80px;
+    min-width: 20px;
     font-size: 14px;
     color: var(--text-primary);
+}
+
+.topic-input-field:focus,
+.tag-input-field:focus {
+    min-width: 80px;
 }
 
 /* ========================================

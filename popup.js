@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messageInput: document.getElementById('message-input'),
     tagsContainer: document.getElementById('tags-container'),
     newTagInput: document.getElementById('new-tag-input'),
+    tagInputHint: document.getElementById('tag-input-hint'),
 
 
     // File handling
@@ -55,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tokenInput: document.getElementById('token-input'),
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
+    topicInputHint: document.getElementById('topic-input-hint'),
 
     insertUrlBtn: document.getElementById('insert-url-btn'),
   };
@@ -439,6 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Topics handling (badges)
     elements.newTopicInput.addEventListener('keydown', handleTopicKeydown);
+    elements.newTopicInput.addEventListener('input', updateTopicInputHint);
     elements.topicsContainer.addEventListener('click', handleTopicRemove);
 
     // Insert URL button
@@ -472,6 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Tags handling (badges)
     elements.newTagInput.addEventListener('keydown', handleTagKeydown);
+    elements.newTagInput.addEventListener('input', updateTagInputHint);
     elements.tagsContainer.addEventListener('click', handleTagRemove);
 
     // Advanced options toggle
@@ -786,6 +790,7 @@ document.addEventListener('DOMContentLoaded', () => {
           saveToStorage({ lastTags: [...tags] });
         }
         elements.newTagInput.value = '';
+        updateTagInputHint(); // Hide hint after clearing
       }
     } else if (e.key === 'Backspace' && !elements.newTagInput.value) {
       // Remove last tag if input is empty
@@ -795,6 +800,10 @@ document.addEventListener('DOMContentLoaded', () => {
         saveToStorage({ lastTags: [...tags] });
       }
     }
+  }
+
+  function updateTagInputHint() {
+    elements.tagInputHint.classList.toggle('visible', elements.newTagInput.value.length > 0);
   }
 
   function handleTagRemove(e) {
@@ -866,6 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
           saveConfig();
         }
         elements.newTopicInput.value = '';
+        updateTopicInputHint(); // Hide hint after clearing
       }
     } else if (e.key === 'Backspace' && !elements.newTopicInput.value) {
       // Remove last topic if input is empty
@@ -875,6 +885,10 @@ document.addEventListener('DOMContentLoaded', () => {
         saveConfig();
       }
     }
+  }
+
+  function updateTopicInputHint() {
+    elements.topicInputHint.classList.toggle('visible', elements.newTopicInput.value.length > 0);
   }
 
   function handleTopicRemove(e) {
