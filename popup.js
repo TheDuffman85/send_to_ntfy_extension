@@ -897,7 +897,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function openNtfyUrl() {
     if (config.apiUrl) {
-      chrome.tabs.create({ url: config.apiUrl });
+      let url = config.apiUrl;
+      const topic = elements.topicSelect.value;
+
+      // Only append topic if it is a valid topic (present in the list of configured topics)
+      if (topic && config.topics.includes(topic)) {
+        if (url.endsWith('/')) {
+          url = url.slice(0, -1);
+        }
+        url += `/${topic}`;
+      }
+
+      chrome.tabs.create({ url: url });
     }
   }
 
