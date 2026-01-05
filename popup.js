@@ -938,11 +938,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (!message && !storedFile) {
-      showStatus('Enter a message or attach a file', 'warning');
-      return;
-    }
-
     elements.sendBtn.disabled = true;
 
     try {
