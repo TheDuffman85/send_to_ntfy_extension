@@ -23,10 +23,24 @@ const NtfyAPI = {
      * @param {string} accessToken - Bearer token for authentication
      * @returns {Headers}
      */
-    buildAuthHeaders(accessToken) {
+    buildAuthHeaders(accessToken, apiUrl) {
         const headers = new Headers();
         if (accessToken) {
             headers.set('Authorization', `Bearer ${accessToken}`);
+        } else if (apiUrl) {
+            try {
+                const url = new URL(apiUrl);
+                if (url.username || url.password) {
+                    const username = decodeURIComponent(url.username);
+                    const password = decodeURIComponent(url.password);
+                    const credentials = `${username}:${password}`;
+                    // Use robust base64 encoding that supports UTF-8
+                    const auth = btoa(unescape(encodeURIComponent(credentials)));
+                    headers.set('Authorization', `Basic ${auth}`);
+                }
+            } catch (e) {
+                // Invoke error handling or logging if necessary, but silent failure relies on no auth
+            }
         }
         return headers;
     },
@@ -83,7 +97,7 @@ const NtfyAPI = {
      */
     async sendNotification(config, topic, { message, title, priority, tags }) {
         const fullUrl = this.buildTopicUrl(config.apiUrl, topic);
-        const headers = this.buildAuthHeaders(config.accessToken);
+        const headers = this.buildAuthHeaders(config.accessToken, config.apiUrl);
 
         if (title) {
             headers.set('X-Title', this.encodeHeaderValue(title));
@@ -123,7 +137,7 @@ const NtfyAPI = {
      */
     async sendAttachment(config, topic, { data, filename, message, title, priority, tags }) {
         const fullUrl = this.buildTopicUrl(config.apiUrl, topic);
-        const headers = this.buildAuthHeaders(config.accessToken);
+        const headers = this.buildAuthHeaders(config.accessToken, config.apiUrl);
 
         headers.set('X-Filename', this.encodeHeaderValue(filename));
 
