@@ -87,19 +87,20 @@
       <!-- File Attachment -->
       <div class="file-section">
         <div class="file-input-wrapper">
-          <input type="file" class="file-input" id="file-input">
+          <input type="file" class="file-input" id="file-input" multiple>
           <button class="file-btn" id="file-btn">
-            📎 Attach file
+            📎 Attach files
           </button>
         </div>
-        <div class="file-preview" id="file-preview">
-          <span class="file-icon">📄</span>
-          <div class="file-info">
-            <div class="file-name" id="file-name"></div>
-            <div class="file-size" id="file-size"></div>
-          </div>
-          <button class="file-remove" id="file-remove" title="Remove file">×</button>
-        </div>
+        <div class="file-preview" id="file-preview" aria-live="polite"></div>
+        <label class="zip-toggle" id="zip-toggle">
+          <span class="zip-toggle-copy">
+            <span class="zip-toggle-title">Send files as one uncompressed ZIP</span>
+            <span class="zip-toggle-hint">One ntfy message containing every attached file.</span>
+          </span>
+          <input type="checkbox" id="zip-checkbox" aria-label="Send files as one uncompressed ZIP">
+          <span class="zip-switch" aria-hidden="true"><span></span></span>
+        </label>
       </div>
 
       <!-- Advanced Options Toggle -->
@@ -187,6 +188,7 @@
 
   <div id="tooltip" class="tooltip"></div>
   <script src="ntfy.js"></script>
+  <script src="zip.js"></script>
   <script src="popup.js"></script>
 </body>
 

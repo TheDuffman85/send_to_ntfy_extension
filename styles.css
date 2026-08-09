@@ -539,22 +539,137 @@ body {
     background-color: rgba(51, 133, 116, 0.1);
 }
 
+.file-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .file-preview {
     display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background-color: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    /* Reserve room for the ZIP toggle, advanced options, and send footer. */
+    max-height: 100px;
+    overflow-y: auto;
 }
 
 .file-preview.visible {
     display: flex;
 }
 
+/* The action popup cannot exceed 600px. Collapse file rows while the larger
+   advanced section is open; the attachment count remains on the button. */
+.main-content.advanced-open.has-multiple-attachments .file-preview.visible {
+    display: none;
+}
+
+.file-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.zip-toggle {
+    display: none;
+    position: relative;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 9px 10px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s, opacity 0.2s;
+}
+
+.zip-toggle.visible {
+    display: flex;
+}
+
+.zip-toggle:hover:not(.disabled) {
+    border-color: var(--primary);
+}
+
+.zip-toggle.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.zip-toggle-copy {
+    flex: 1;
+    min-width: 0;
+}
+
+.zip-toggle-title,
+.zip-toggle-hint {
+    display: block;
+}
+
+.zip-toggle-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.zip-toggle-hint {
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.zip-toggle input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.zip-switch {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 20px;
+    padding: 2px;
+    background-color: var(--border-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.zip-switch span {
+    display: block;
+    width: 14px;
+    height: 14px;
+    background-color: var(--bg-card);
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s;
+}
+
+.zip-toggle input[type="checkbox"]:checked + .zip-switch {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.zip-toggle input[type="checkbox"]:checked + .zip-switch span {
+    transform: translateX(14px);
+}
+
+.zip-toggle input[type="checkbox"]:focus-visible + .zip-switch {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+}
+
 .file-icon {
     font-size: 20px;
+    flex-shrink: 0;
 }
 
 .file-info {
@@ -588,6 +703,11 @@ body {
 
 .file-remove:hover {
     color: #e53935;
+}
+
+.file-remove:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 
@@ -641,11 +761,17 @@ body {
    ======================================== */
 
 .send-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-top: 10px;
-    padding-top: 8px;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 8px 16px 12px;
+    background-color: var(--bg-main);
 }
 
 .send-another-group {

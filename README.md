@@ -10,7 +10,7 @@ A browser extension to send the notifications to [ntfy.sh](https://ntfy.sh) or y
 ## Features
 
 - **Context Menu**: Right-click to send selected text, images, or the current page URL directly to ntfy.
-- **File Upload**: Easily upload and send files to your ntfy topics.
+- **File Upload**: Select multiple files and send them as separate notifications or one uncompressed ZIP to your ntfy topics.
 - **Quick Sharing**: Send the current page URL or custom text to your ntfy topics.
 - **Keyboard Shortcuts**: Send messages quickly with `Right Ctrl + Enter`.
 - **Custom Configuration**: Support for self-hosted ntfy servers.
@@ -43,6 +43,8 @@ Access the extension settings to configure your preferences:
 3. **Authentication**: If your server requires it, enter your Access Token.
 4. **Priorities**: Choose a default priority level or adjust it per message.
 5. **Tags**: Add tags to your notifications for better organization.
+
+When multiple files are attached, the extension sends them as separate notifications by default. Enable **Send files as one uncompressed ZIP** below the attachment list to send all of them in one ZIP attachment instead. The preference is remembered and can be switched at any time.
 
 ## Development
 
