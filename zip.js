@@ -1,10 +1,10 @@
-// ZIP utilities for the popup. Archives use the "stored" method, so files are
-// packaged without compression and can be extracted by any standard ZIP tool.
+// ZIP utilities for the popup. Entries are deflated so nested ZIP-based files
+// such as APKs do not expose their own signatures to attachment type sniffing.
 
 const ZipUtils = (() => {
     const textEncoder = new TextEncoder();
     const UTF8_FLAG = 0x0800;
-    const STORE_METHOD = 0;
+    const DEFLATE_METHOD = 8;
     const crcTable = new Uint32Array(256);
 
     for (let index = 0; index < crcTable.length; index++) {
@@ -78,7 +78,18 @@ const ZipUtils = (() => {
         }
     }
 
-    function createStoredZip(files) {
+    async function deflate(bytes) {
+        if (typeof CompressionStream !== 'function') {
+            throw new Error('This browser does not support ZIP compression');
+        }
+
+        const stream = new Blob([bytes])
+            .stream()
+            .pipeThrough(new CompressionStream('deflate-raw'));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+
+    async function createZip(files) {
         if (!Array.isArray(files) || files.length < 2) {
             throw new Error('At least two files are required to create a ZIP');
         }
@@ -92,7 +103,7 @@ const ZipUtils = (() => {
         const timestamp = getDosDateTime(new Date());
         let localOffset = 0;
 
-        files.forEach((file, index) => {
+        for (const [index, file] of files.entries()) {
             const nameBytes = textEncoder.encode(getEntryName(file.name, index));
             const dataBytes = toBytes(file.data);
 
@@ -103,39 +114,41 @@ const ZipUtils = (() => {
             assertUint32(localOffset, 'The ZIP archive');
 
             const checksum = crc32(dataBytes);
+            const compressedBytes = await deflate(dataBytes);
+            assertUint32(compressedBytes.byteLength, 'A compressed ZIP entry');
             const localHeader = new Uint8Array(30 + nameBytes.length);
             writeUint32(localHeader, 0, 0x04034b50);
             writeUint16(localHeader, 4, 20);
             writeUint16(localHeader, 6, UTF8_FLAG);
-            writeUint16(localHeader, 8, STORE_METHOD);
+            writeUint16(localHeader, 8, DEFLATE_METHOD);
             writeUint16(localHeader, 10, timestamp.time);
             writeUint16(localHeader, 12, timestamp.date);
             writeUint32(localHeader, 14, checksum);
-            writeUint32(localHeader, 18, dataBytes.byteLength);
+            writeUint32(localHeader, 18, compressedBytes.byteLength);
             writeUint32(localHeader, 22, dataBytes.byteLength);
             writeUint16(localHeader, 26, nameBytes.length);
             localHeader.set(nameBytes, 30);
 
-            localParts.push(localHeader, dataBytes);
+            localParts.push(localHeader, compressedBytes);
 
             const centralHeader = new Uint8Array(46 + nameBytes.length);
             writeUint32(centralHeader, 0, 0x02014b50);
             writeUint16(centralHeader, 4, 20);
             writeUint16(centralHeader, 6, 20);
             writeUint16(centralHeader, 8, UTF8_FLAG);
-            writeUint16(centralHeader, 10, STORE_METHOD);
+            writeUint16(centralHeader, 10, DEFLATE_METHOD);
             writeUint16(centralHeader, 12, timestamp.time);
             writeUint16(centralHeader, 14, timestamp.date);
             writeUint32(centralHeader, 16, checksum);
-            writeUint32(centralHeader, 20, dataBytes.byteLength);
+            writeUint32(centralHeader, 20, compressedBytes.byteLength);
             writeUint32(centralHeader, 24, dataBytes.byteLength);
             writeUint16(centralHeader, 28, nameBytes.length);
             writeUint32(centralHeader, 42, localOffset);
             centralHeader.set(nameBytes, 46);
             centralParts.push(centralHeader);
 
-            localOffset += localHeader.length + dataBytes.byteLength;
-        });
+            localOffset += localHeader.length + compressedBytes.byteLength;
+        }
 
         const centralSize = centralParts.reduce((size, part) => size + part.length, 0);
         assertUint32(centralSize, 'The ZIP central directory');
@@ -153,7 +166,7 @@ const ZipUtils = (() => {
         });
     }
 
-    return { createStoredZip };
+    return { createZip };
 })();
 
 globalThis.ZipUtils = ZipUtils;

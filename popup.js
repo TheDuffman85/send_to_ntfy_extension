@@ -649,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveToStorage({ sendAnotherEnabled: config.sendAnotherEnabled });
     });
 
-    // Send multiple attachments either individually or as one uncompressed ZIP.
+    // Send multiple attachments either individually or as one ZIP.
     elements.zipCheckbox.addEventListener('change', handleZipToggleChange);
 
     // File handling
@@ -1179,7 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sendAsZip = filesToSend.length > 1 && elements.zipCheckbox.checked;
 
         if (sendAsZip) {
-          const zipData = ZipUtils.createStoredZip(filesToSend.map(file => ({
+          const zipData = await ZipUtils.createZip(filesToSend.map(file => ({
             name: file.name,
             data: decodeDataUrl(file.data)
           })));
@@ -1187,6 +1187,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await NtfyAPI.sendAttachment(apiConfig, topic, {
             data: zipData,
             filename: getZipFilename(),
+            contentType: 'application/zip',
             message: message,
             title: title,
             priority: selectedPriority,

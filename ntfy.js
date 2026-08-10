@@ -129,17 +129,21 @@ const NtfyAPI = {
      * @param {Object} options - Attachment options
      * @param {ArrayBuffer} options.data - File data as ArrayBuffer
      * @param {string} options.filename - Filename for the attachment
+     * @param {string} [options.contentType] - Explicit MIME type for the attachment
      * @param {string} [options.message] - Optional message
      * @param {string} [options.title] - Optional title
      * @param {number} [options.priority] - Optional priority (1-5, default 3)
      * @param {string} [options.tags] - Optional comma-separated tags
      * @returns {Promise<Response>}
      */
-    async sendAttachment(config, topic, { data, filename, message, title, priority, tags }) {
+    async sendAttachment(config, topic, { data, filename, contentType, message, title, priority, tags }) {
         const fullUrl = this.buildTopicUrl(config.apiUrl, topic);
         const headers = this.buildAuthHeaders(config.accessToken, config.apiUrl);
 
         headers.set('X-Filename', this.encodeHeaderValue(filename));
+        if (contentType) {
+            headers.set('Content-Type', contentType);
+        }
 
         if (message) {
             headers.set('X-Message', this.encodeHeaderValue(message));
