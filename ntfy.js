@@ -89,6 +89,20 @@ const NtfyAPI = {
     },
 
     /**
+     * Whether a URL from a received message is safe to open or copy: http(s) only
+     * @param {string} url
+     * @returns {boolean}
+     */
+    isHttpUrl(url) {
+        try {
+            const protocol = new URL(url).protocol;
+            return protocol === 'https:' || protocol === 'http:';
+        } catch (e) {
+            return false;
+        }
+    },
+
+    /**
      * Base64-encode a UTF-8 string
      * @param {string} value
      * @returns {string}

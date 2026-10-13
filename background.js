@@ -549,7 +549,7 @@ function showDesktopNotification(notification) {
     const priorityLabel = priorityLabels[notification.priority] ? ` [${priorityLabels[notification.priority]}]` : '';
 
     const buttons = [];
-    if (notification.attachment && notification.attachment.url) {
+    if (notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
         buttons.push({ title: '🔗 Open Attachment' });
     }
 
@@ -570,7 +570,7 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
         chrome.storage.local.get(['receivedNotifications'], (result) => {
             const history = result.receivedNotifications || [];
             const notification = history.find(n => n.id === notificationId);
-            if (notification && notification.attachment && notification.attachment.url) {
+            if (notification && notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
                 chrome.tabs.create({ url: notification.attachment.url });
             }
         });

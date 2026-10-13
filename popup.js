@@ -1323,7 +1323,7 @@ document.addEventListener('DOMContentLoaded', () => {
         readBtn.addEventListener('click', () => handleMarkAsRead(notification.id, item, readBtn));
         actions.appendChild(readBtn);
 
-        if (notification.attachment && notification.attachment.url) {
+        if (notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
           const linkBtn = document.createElement('button');
           linkBtn.className = 'notification-action-btn link-btn';
           linkBtn.textContent = '🔗';
