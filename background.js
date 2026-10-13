@@ -10,8 +10,13 @@ if (typeof importScripts === 'function') {
 let ws = null;
 let wsUrl = null; // URL the current socket was opened with, to detect configuration changes
 let reconnectTimer = null;
+let keepaliveTimer = null;
 let reconnectDelay = 5000;
 const MAX_RECONNECT_DELAY = 60000;
+// Chrome stops an idle extension service worker after 30 s. Since Chrome 116, WebSocket traffic resets
+// that timer, but ntfy only sends a keepalive every 45 s by default, so send a small frame of our own.
+// ntfy reads and discards client frames of up to 64 bytes.
+const WS_KEEPALIVE_INTERVAL = 20000;
 const MAX_HISTORY_ITEMS = 50;
 const MAX_SEEN_IDS_PER_TOPIC = 200;
 // Window fetched silently the first time a topic is synced
@@ -353,7 +358,24 @@ async function initWebSocket() {
     connectWebSocket(config);
 }
 
+function startKeepalive(socket) {
+    stopKeepalive();
+    keepaliveTimer = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send('keepalive');
+        }
+    }, WS_KEEPALIVE_INTERVAL);
+}
+
+function stopKeepalive() {
+    if (keepaliveTimer) {
+        clearInterval(keepaliveTimer);
+        keepaliveTimer = null;
+    }
+}
+
 function closeWebSocket() {
+    stopKeepalive();
     if (ws) {
         ws.onclose = null;
         ws.close();
@@ -394,9 +416,11 @@ async function connectWebSocket(config) {
         ws = new WebSocket(url);
         wsUrl = url;
 
+        const socket = ws;
         ws.onopen = () => {
             console.log('WebSocket connected successfully.');
             reconnectDelay = 5000;
+            startKeepalive(socket);
             syncMissedMessages();
             updateUnreadBadge(); // Initial badge sync
         };
@@ -413,6 +437,7 @@ async function connectWebSocket(config) {
         };
 
         ws.onclose = (event) => {
+            stopKeepalive();
             console.log(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason}. Reconnecting...`);
             scheduleReconnect(config);
         };
