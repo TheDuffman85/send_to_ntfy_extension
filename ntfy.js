@@ -7,16 +7,46 @@ const NtfyAPI = {
      * @returns {Promise<{apiUrl: string, accessToken: string, topics: string[]}>}
      */
     async getConfig() {
+        const accessToken = await this.getAccessToken();
         return new Promise((resolve) => {
-            chrome.storage.sync.get(['apiUrl', 'accessToken', 'topics', 'includeUrl'], (items) => {
+            chrome.storage.sync.get(['apiUrl', 'topics', 'includeUrl'], (items) => {
                 resolve({
                     apiUrl: items.apiUrl || '',
-                    accessToken: items.accessToken || '',
+                    accessToken: accessToken,
                     topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
                     includeUrl: items.includeUrl === true
                 });
             });
         });
+    },
+
+    /**
+     * Get the access token. It is kept in storage.local, so browser sync doesn't copy it to other
+     * browsers; a token saved in storage.sync by an older version is moved there.
+     * @returns {Promise<string>}
+     */
+    async getAccessToken() {
+        const local = await new Promise(resolve => chrome.storage.local.get(['accessToken'], resolve));
+        if (local.accessToken !== undefined) {
+            return local.accessToken;
+        }
+
+        const synced = await new Promise(resolve => chrome.storage.sync.get(['accessToken'], resolve));
+        if (synced.accessToken === undefined) {
+            return '';
+        }
+        await this.setAccessToken(synced.accessToken);
+        return synced.accessToken;
+    },
+
+    /**
+     * Save the access token to storage.local and remove any copy left in storage.sync
+     * @param {string} accessToken
+     * @returns {Promise<void>}
+     */
+    async setAccessToken(accessToken) {
+        await new Promise(resolve => chrome.storage.local.set({ accessToken: accessToken || '' }, resolve));
+        await new Promise(resolve => chrome.storage.sync.remove(['accessToken'], resolve));
     },
 
     /**

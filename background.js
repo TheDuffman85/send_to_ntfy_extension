@@ -53,6 +53,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
         }
     }
     if (area === 'local') {
+        if (changes.accessToken) {
+            initWebSocket();
+        }
         if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
             updateUnreadBadge();
         }

@@ -93,7 +93,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let isSettingsView = false;
   let rightCtrlDown = false;
 
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl'];
+  // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl'];
 
   // Initialize
   init();
@@ -129,12 +130,13 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadConfig() {
     try {
       const items = await getFromStorage(STORAGE_KEYS);
+      const accessToken = await NtfyAPI.getAccessToken();
       config.pageUrl = await getPageUrl();
       config = {
         ...config,
         topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
         apiUrl: items.apiUrl || '',
-        accessToken: items.accessToken || '',
+        accessToken: accessToken,
 
         theme: items.theme || 'auto',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
@@ -174,7 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      await saveToStorage(newConfig);
+      const { accessToken, ...syncedSettings } = newConfig;
+      await saveToStorage(syncedSettings);
+      await NtfyAPI.setAccessToken(accessToken);
       config = {
         ...config,
         ...newConfig,
