@@ -1346,7 +1346,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     } catch (error) {
       console.error('Error loading notifications:', error);
-      elements.notificationsList.innerHTML = `<div class="notifications-error">Error: ${error.message}</div>`;
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'notifications-error';
+      errorDiv.textContent = `Error: ${error.message}`;
+      elements.notificationsList.replaceChildren(errorDiv);
     }
   }
 
