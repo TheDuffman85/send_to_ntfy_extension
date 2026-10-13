@@ -281,6 +281,30 @@ const NtfyAPI = {
     },
 
     /**
+     * Check whether the configured credentials can read a topic (ntfy's GET /<topic>/auth)
+     * @param {Object} config - Configuration object with apiUrl and accessToken
+     * @param {string} topic
+     * @returns {Promise<boolean|null>} - true or false, or null if the server couldn't be asked
+     */
+    async canReadTopic(config, topic) {
+        try {
+            const response = await fetch(`${this.buildTopicUrl(config.apiUrl, topic)}/auth`, {
+                method: 'GET',
+                headers: this.buildAuthHeaders(config.accessToken, config.apiUrl)
+            });
+            if (response.ok) {
+                return true;
+            }
+            if (response.status === 401 || response.status === 403) {
+                return false;
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /**
      * Fetch cached notifications for a topic
      * @param {Object} config - Configuration object with apiUrl and accessToken
      * @param {string} topic - Topic to fetch from

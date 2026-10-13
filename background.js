@@ -19,6 +19,8 @@ const MAX_RECONNECT_DELAY = 60000;
 const WS_KEEPALIVE_INTERVAL = 20000;
 const MAX_HISTORY_ITEMS = 50;
 const MAX_SEEN_IDS_PER_TOPIC = 200;
+// How long the read-access check of the topics is reused
+const READABLE_TOPICS_TTL = 60 * 60 * 1000;
 // Window fetched silently the first time a topic is synced
 const INITIAL_SYNC_SINCE = '24h';
 
@@ -345,11 +347,19 @@ async function initWebSocket() {
         return;
     }
 
+    const topics = await getReadableTopics(config);
+    if (topics.length === 0) {
+        console.log('No configured topic is readable, skipping WebSocket connection.');
+        closeWebSocket();
+        return;
+    }
+    const subscription = { ...config, topics };
+
     if (ws) {
         if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
             let expectedUrl = null;
             try {
-                expectedUrl = buildWsUrl(config).url;
+                expectedUrl = buildWsUrl(subscription).url;
             } catch (e) {}
             if (wsUrl === expectedUrl) {
                 return;
@@ -358,7 +368,29 @@ async function initWebSocket() {
         }
     }
 
-    connectWebSocket(config);
+    connectWebSocket(subscription);
+}
+
+// ntfy rejects a subscription to several topics if any one of them isn't readable, and a topic the
+// token can only send to is a normal setup. So subscribe to, and poll, the readable topics only.
+let readableTopicsCache = { key: null, topics: [], time: 0 };
+async function getReadableTopics(config) {
+    const key = JSON.stringify([config.apiUrl, config.accessToken, config.topics]);
+    if (readableTopicsCache.key === key && Date.now() - readableTopicsCache.time < READABLE_TOPICS_TTL) {
+        return readableTopicsCache.topics;
+    }
+
+    const access = await Promise.all(config.topics.map(topic => NtfyAPI.canReadTopic(config, topic)));
+    // A topic the server couldn't be asked about (null) is kept, and the result isn't cached
+    const topics = config.topics.filter((topic, i) => access[i] !== false);
+    const skipped = config.topics.filter((topic, i) => access[i] === false);
+    if (skipped.length > 0) {
+        console.log(`Not receiving from topics without read access: ${skipped.join(', ')}`);
+    }
+    if (!access.includes(null)) {
+        readableTopicsCache = { key, topics, time: Date.now() };
+    }
+    return topics;
 }
 
 function startKeepalive(socket) {
@@ -442,7 +474,7 @@ async function connectWebSocket(config) {
         ws.onclose = (event) => {
             stopKeepalive();
             console.log(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason}. Reconnecting...`);
-            scheduleReconnect(config);
+            scheduleReconnect();
         };
 
         // Don't log the event or the exception: they contain the URL, and with it the ?auth= credentials
@@ -451,22 +483,18 @@ async function connectWebSocket(config) {
         };
     } catch (error) {
         console.error('Failed to create WebSocket:', error.name);
-        scheduleReconnect(config);
+        scheduleReconnect();
     }
 }
 
-function scheduleReconnect(config) {
+function scheduleReconnect() {
     if (reconnectTimer) return;
 
     console.log(`Scheduling WebSocket reconnect in ${reconnectDelay / 1000}s...`);
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        NtfyAPI.getConfig().then(currentConfig => {
-            if (currentConfig.apiUrl && currentConfig.topics.length > 0) {
-                reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
-                connectWebSocket(currentConfig);
-            }
-        });
+        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+        initWebSocket();
     }, reconnectDelay);
 }
 
@@ -593,8 +621,9 @@ async function runSync() {
     if (!config.apiUrl || config.topics.length === 0) return;
 
     const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
+    const topics = await getReadableTopics(config);
 
-    for (const topic of config.topics) {
+    for (const topic of topics) {
         // A topic synced for the first time gets its recent history without desktop notifications
         const state = topicSyncState[topic];
         const since = state && state.since !== null ? state.since : INITIAL_SYNC_SINCE;
