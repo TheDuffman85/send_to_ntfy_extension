@@ -46,7 +46,7 @@ Access the extension settings to configure your preferences:
 
 1. **ntfy Server**: Default is `https://ntfy.sh`, but you can change this to your self-hosted instance.
 2. **Topic**: Set your default target topic.
-3. **Authentication**: If your server requires it, enter your Access Token.
+3. **Authentication**: If your server requires it, enter your Access Token. It is stored locally and is not copied to other browsers by browser sync.
 4. **Priorities**: Choose a default priority level or adjust it per message.
 5. **Tags**: Add tags to your notifications for better organization.
 
