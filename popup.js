@@ -51,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Settings inputs
     urlInput: document.getElementById('url-input'),
     tokenInput: document.getElementById('token-input'),
+    serverAccessBtn: document.getElementById('server-access-btn'),
+    serverAccessHint: document.getElementById('server-access-hint'),
     includeUrlCheckbox: document.getElementById('include-url-checkbox'),
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
@@ -91,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let selectedPriority = 3;
   let isSettingsView = false;
+  let serverAccessMissing = false;
   let rightCtrlDown = false;
 
   // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
@@ -106,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await checkSessionAndCleanup(); // Check session and cleanup old files if needed
     await loadStoredFile();
     setupEventListeners();
+    await updateServerAccessUI(config.apiUrl, config.accessToken);
     updateUI();
     // Ensure priority UI is updated after config load
     updatePriorityUI();
@@ -192,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateTopicDropdown();
       renderTopics(); // Re-render to ensure state consistency
       updateThemeChipsUI(); // Ensure UI reflects state
+      updateServerAccessUI(config.apiUrl, config.accessToken);
 
     } catch (error) {
       showSettingsStatus('Failed to save settings', 'error');
@@ -208,6 +213,55 @@ document.addEventListener('DOMContentLoaded', () => {
       clearTimeout(timeout);
       timeout = setTimeout(later, wait);
     };
+  }
+
+  // ==================
+  // Server Access
+  // ==================
+
+  // ntfy answers CORS preflights with Access-Control-Allow-Headers: *, which doesn't cover
+  // Authorization, so authenticated requests need a host permission for the server.
+  function serverOriginPattern(apiUrl) {
+    try {
+      const url = new URL(apiUrl);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        return null;
+      }
+      // Match patterns have no port and match every port
+      return `${url.protocol}//${url.hostname}/*`;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function updateServerAccessUI(apiUrl, accessToken) {
+    const pattern = serverOriginPattern(apiUrl);
+    let missing = false;
+    if (pattern && NtfyAPI.buildAuthHeaderValue(accessToken, apiUrl)) {
+      try {
+        missing = !(await chrome.permissions.contains({ origins: [pattern] }));
+      } catch (e) {
+        missing = false;
+      }
+    }
+
+    serverAccessMissing = missing;
+    elements.serverAccessBtn.style.display = missing ? '' : 'none';
+    elements.serverAccessHint.style.display = missing ? '' : 'none';
+    elements.settingsBtn.classList.toggle('highlight', !(config.apiUrl && config.topics.length > 0) || missing);
+  }
+
+  function requestServerAccess() {
+    const pattern = serverOriginPattern(elements.urlInput.value.trim());
+    if (!pattern) {
+      return;
+    }
+
+    // Called directly from the click: permissions.request needs a user gesture
+    chrome.permissions.request({ origins: [pattern] }, (granted) => {
+      showSettingsStatus(granted ? 'Server access granted' : 'Server access not granted', granted ? 'success' : 'error');
+      updateServerAccessUI(elements.urlInput.value.trim(), elements.tokenInput.value);
+    });
   }
 
   // ==================
@@ -496,6 +550,8 @@ document.addEventListener('DOMContentLoaded', () => {
       saveConfig();
     });
 
+    elements.serverAccessBtn.addEventListener('click', requestServerAccess);
+
 
     // Topics handling (badges)
     elements.newTopicInput.addEventListener('keydown', handleTopicKeydown);
@@ -609,6 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.urlInput.value = config.apiUrl;
     elements.tokenInput.value = config.accessToken;
     renderTopics(); // Render badges
+    updateServerAccessUI(config.apiUrl, config.accessToken);
 
     updateThemeChipsUI();
 
@@ -646,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Toggle disabled state on form and highlight on settings button
     elements.mainView.classList.toggle('disabled', !isConfigured);
-    elements.settingsBtn.classList.toggle('highlight', !isConfigured);
+    elements.settingsBtn.classList.toggle('highlight', !isConfigured || serverAccessMissing);
 
     // Enable/disable the open URL button based on configuration
     elements.openUrlBtn.disabled = !config.apiUrl;
