@@ -26,24 +26,55 @@ const NtfyAPI = {
      */
     buildAuthHeaders(accessToken, apiUrl) {
         const headers = new Headers();
+        const auth = this.buildAuthHeaderValue(accessToken, apiUrl);
+        if (auth) {
+            headers.set('Authorization', auth);
+        }
+        return headers;
+    },
+
+    /**
+     * Build the Authorization header value: Bearer token, or Basic from credentials embedded in the URL
+     * @param {string} accessToken - Bearer token for authentication
+     * @param {string} apiUrl - Server URL, may contain user:password@
+     * @returns {string} - Header value, or '' when there is no authentication
+     */
+    buildAuthHeaderValue(accessToken, apiUrl) {
         if (accessToken) {
-            headers.set('Authorization', `Bearer ${accessToken}`);
-        } else if (apiUrl) {
+            return `Bearer ${accessToken}`;
+        }
+        if (apiUrl) {
             try {
                 const url = new URL(apiUrl);
                 if (url.username || url.password) {
                     const username = decodeURIComponent(url.username);
                     const password = decodeURIComponent(url.password);
-                    const credentials = `${username}:${password}`;
-                    // Use robust base64 encoding that supports UTF-8
-                    const auth = btoa(unescape(encodeURIComponent(credentials)));
-                    headers.set('Authorization', `Basic ${auth}`);
+                    return `Basic ${this.base64Encode(`${username}:${password}`)}`;
                 }
             } catch (e) {
-                // Invoke error handling or logging if necessary, but silent failure relies on no auth
+                // Invalid URL: no authentication
             }
         }
-        return headers;
+        return '';
+    },
+
+    /**
+     * Base64-encode a UTF-8 string
+     * @param {string} value
+     * @returns {string}
+     */
+    base64Encode(value) {
+        return btoa(unescape(encodeURIComponent(value)));
+    },
+
+    /**
+     * Encode a string as ntfy's ?auth= query parameter expects it: base64url without padding
+     * (Go's base64.RawURLEncoding) of the whole Authorization header value
+     * @param {string} value
+     * @returns {string}
+     */
+    base64UrlEncode(value) {
+        return this.base64Encode(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     },
 
     /**

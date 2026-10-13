@@ -8,6 +8,7 @@ if (typeof importScripts === 'function') {
 
 // WebSocket & Background Sync State
 let ws = null;
+let wsUrl = null; // URL the current socket was opened with, to detect configuration changes
 let reconnectTimer = null;
 let reconnectDelay = 5000;
 const MAX_RECONNECT_DELAY = 60000;
@@ -333,8 +334,11 @@ async function initWebSocket() {
 
     if (ws) {
         if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-            const expectedUrl = buildWsUrl(config);
-            if (ws.url === expectedUrl) {
+            let expectedUrl = null;
+            try {
+                expectedUrl = buildWsUrl(config).url;
+            } catch (e) {}
+            if (wsUrl === expectedUrl) {
                 return;
             }
             console.log('Configuration changed, reconnecting WebSocket...');
@@ -349,6 +353,7 @@ function closeWebSocket() {
         ws.onclose = null;
         ws.close();
         ws = null;
+        wsUrl = null;
     }
     if (reconnectTimer) {
         clearTimeout(reconnectTimer);
@@ -356,51 +361,33 @@ function closeWebSocket() {
     }
 }
 
+// Returns { url, logUrl }: url may carry the credentials in ?auth=, logUrl never does
 function buildWsUrl(config) {
-    let baseUrl = config.apiUrl;
-
-    if (baseUrl.startsWith('https://')) {
-        baseUrl = baseUrl.replace('https://', 'wss://');
-    } else if (baseUrl.startsWith('http://')) {
-        baseUrl = baseUrl.replace('http://', 'ws://');
-    } else {
-        baseUrl = 'wss://' + baseUrl;
+    let apiUrl = config.apiUrl;
+    if (!/^https?:\/\//i.test(apiUrl)) {
+        apiUrl = 'https://' + apiUrl;
     }
 
-    if (baseUrl.endsWith('/')) {
-        baseUrl = baseUrl.slice(0, -1);
-    }
+    // Host only, like the HTTP calls: credentials embedded in the URL must not end up in the WebSocket URL
+    const urlObj = new URL(apiUrl);
+    const scheme = urlObj.protocol === 'http:' ? 'ws:' : 'wss:';
+    const logUrl = `${scheme}//${urlObj.host}/${config.topics.join(',')}/ws`;
 
-    const topicsJoined = config.topics.join(',');
-    let wsUrl = `${baseUrl}/${topicsJoined}/ws`;
+    // Browsers can't set headers on a WebSocket, so ntfy accepts the Authorization header value in ?auth=
+    const auth = NtfyAPI.buildAuthHeaderValue(config.accessToken, config.apiUrl);
+    const url = auth ? `${logUrl}?auth=${NtfyAPI.base64UrlEncode(auth)}` : logUrl;
 
-    if (config.accessToken) {
-        const authString = `Bearer ${config.accessToken}`;
-        const base64Auth = btoa(unescape(encodeURIComponent(authString)));
-        wsUrl += `?auth=${encodeURIComponent(base64Auth)}`;
-    } else {
-        try {
-            const urlObj = new URL(config.apiUrl);
-            if (urlObj.username || urlObj.password) {
-                const username = decodeURIComponent(urlObj.username);
-                const password = decodeURIComponent(urlObj.password);
-                const auth = btoa(unescape(encodeURIComponent(`${username}:${password}`)));
-                wsUrl += `?auth=Basic ${auth}`;
-            }
-        } catch (e) {}
-    }
-
-    return wsUrl;
+    return { url, logUrl };
 }
 
 async function connectWebSocket(config) {
     closeWebSocket();
 
-    const wsUrl = buildWsUrl(config);
-    console.log('Connecting WebSocket to:', wsUrl.split('?')[0]);
-
     try {
-        ws = new WebSocket(wsUrl);
+        const { url, logUrl } = buildWsUrl(config);
+        console.log('Connecting WebSocket to:', logUrl);
+        ws = new WebSocket(url);
+        wsUrl = url;
 
         ws.onopen = () => {
             console.log('WebSocket connected successfully.');
@@ -425,11 +412,12 @@ async function connectWebSocket(config) {
             scheduleReconnect(config);
         };
 
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
+        // Don't log the event or the exception: they contain the URL, and with it the ?auth= credentials
+        ws.onerror = () => {
+            console.error('WebSocket error');
         };
     } catch (error) {
-        console.error('Failed to create WebSocket:', error);
+        console.error('Failed to create WebSocket:', error.name);
         scheduleReconnect(config);
     }
 }
