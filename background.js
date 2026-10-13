@@ -13,6 +13,9 @@ let reconnectTimer = null;
 let reconnectDelay = 5000;
 const MAX_RECONNECT_DELAY = 60000;
 const MAX_HISTORY_ITEMS = 50;
+const MAX_SEEN_IDS_PER_TOPIC = 200;
+// Window fetched silently the first time a topic is synced
+const INITIAL_SYNC_SINCE = '24h';
 
 
 const PARENT_MENU_ID = 'ntfy-parent';
@@ -23,6 +26,8 @@ const SEND_TAB_ID = 'ntfy-send-tab';
 
 // Initialize context menu, WebSocket, and alarms on install and startup
 chrome.runtime.onInstalled.addListener(() => {
+    // Replaced by the per-topic topicSyncState
+    chrome.storage.local.remove('lastNotificationId');
     updateContextMenu();
     initWebSocket();
     setupAlarm();
@@ -439,12 +444,44 @@ function scheduleReconnect(config) {
 
 async function handleIncomingMessage(notification) {
     console.log('Received notification:', notification.id, notification.title);
-
-    await saveNotificationToHistory(notification);
-    await chrome.storage.local.set({ lastNotificationId: notification.id });
-    showDesktopNotification(notification);
+    await processMessage(notification, { notify: true });
 }
 
+// The live socket and the catch-up poll both read-modify-write the history and the sync state.
+// Run those updates one at a time so neither overwrites the other's.
+let storageQueue = Promise.resolve();
+function serialized(task) {
+    const run = storageQueue.then(task);
+    storageQueue = run.catch(() => {});
+    return run;
+}
+
+// Per topic, topicSyncState holds the server time of the newest message seen (the next poll's
+// since=, inclusive) and the ids of the latest messages, to skip the ones a poll returns again.
+// since is null until the topic's first message.
+function processMessage(notification, { notify }) {
+    return serialized(async () => {
+        const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
+        const state = topicSyncState[notification.topic] || { since: null, ids: [] };
+        if (state.ids.includes(notification.id)) {
+            return;
+        }
+
+        state.ids = [...state.ids, notification.id].slice(-MAX_SEEN_IDS_PER_TOPIC);
+        if (state.since === null || notification.time > state.since) {
+            state.since = notification.time;
+        }
+        topicSyncState[notification.topic] = state;
+        await chrome.storage.local.set({ topicSyncState });
+
+        const added = await saveNotificationToHistory(notification);
+        if (added && notify) {
+            showDesktopNotification(notification);
+        }
+    });
+}
+
+// Resolves to true if the notification was added, false if it was already there or deleted
 async function saveNotificationToHistory(notification) {
     return new Promise((resolve) => {
         chrome.storage.local.get(['receivedNotifications', 'deletedMessageIds'], (result) => {
@@ -452,12 +489,12 @@ async function saveNotificationToHistory(notification) {
             const deletedIds = result.deletedMessageIds || [];
 
             if (deletedIds.includes(notification.id)) {
-                resolve();
+                resolve(false);
                 return;
             }
 
             if (history.some(n => n.id === notification.id)) {
-                resolve();
+                resolve(false);
                 return;
             }
 
@@ -468,7 +505,7 @@ async function saveNotificationToHistory(notification) {
             }
 
             chrome.storage.local.set({ receivedNotifications: history }, () => {
-                resolve();
+                resolve(true);
             });
         });
     });
@@ -512,54 +549,59 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
     }
 });
 
-async function syncMissedMessages() {
+// Concurrent callers (socket open, alarm, popup) share the sync already running
+let syncInFlight = null;
+function syncMissedMessages() {
+    if (!syncInFlight) {
+        syncInFlight = runSync().finally(() => {
+            syncInFlight = null;
+        });
+    }
+    return syncInFlight;
+}
+
+async function runSync() {
     const config = await NtfyAPI.getConfig();
     if (!config.apiUrl || config.topics.length === 0) return;
 
-    chrome.storage.local.get(['lastNotificationId'], async (result) => {
-        const lastId = result.lastNotificationId;
-        if (!lastId) {
-            console.log('No lastNotificationId found, doing initial historical fetch...');
-            await fetchHistoricalNotifications(config);
-            return;
-        }
+    const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
 
-        console.log(`Syncing missed messages since ID: ${lastId}`);
-
-        for (const topic of config.topics) {
-            try {
-                const missed = await NtfyAPI.getNotifications(config, topic, lastId);
-                if (missed && missed.length > 0) {
-                    console.log(`Found ${missed.length} missed messages in topic: ${topic}`);
-                    for (const notification of missed) {
-                        await handleIncomingMessage(notification);
-                    }
-                }
-            } catch (error) {
-                console.error(`Failed to sync missed messages for topic ${topic}:`, error);
-            }
-        }
-    });
-}
-
-async function fetchHistoricalNotifications(config) {
     for (const topic of config.topics) {
+        // A topic synced for the first time gets its recent history without desktop notifications
+        const state = topicSyncState[topic];
+        const since = state && state.since !== null ? state.since : INITIAL_SYNC_SINCE;
+
         try {
-            const messages = await NtfyAPI.getNotifications(config, topic, '24h');
-            if (messages && messages.length > 0) {
-                messages.sort((a, b) => a.time - b.time);
-
-                const newest = messages[messages.length - 1];
-                await chrome.storage.local.set({ lastNotificationId: newest.id });
-
-                for (const notification of messages) {
-                    await saveNotificationToHistory(notification);
-                }
+            const messages = await NtfyAPI.getNotifications(config, topic, since);
+            messages.sort((a, b) => a.time - b.time);
+            for (const notification of messages) {
+                await processMessage(notification, { notify: Boolean(state) });
+            }
+            if (!state) {
+                await serialized(async () => {
+                    const current = await chrome.storage.local.get(['topicSyncState']);
+                    const states = current.topicSyncState || {};
+                    if (!states[topic]) {
+                        states[topic] = { since: null, ids: [] };
+                        await chrome.storage.local.set({ topicSyncState: states });
+                    }
+                });
             }
         } catch (error) {
-            console.error(`Failed to fetch historical notifications for topic ${topic}:`, error);
+            console.error(`Failed to sync missed messages for topic ${topic}:`, error.message);
         }
     }
+
+    // Forget removed topics, so adding one back starts with a silent sync again
+    await serialized(async () => {
+        const current = await chrome.storage.local.get(['topicSyncState']);
+        const states = current.topicSyncState || {};
+        const stale = Object.keys(states).filter(topic => !config.topics.includes(topic));
+        if (stale.length > 0) {
+            stale.forEach(topic => delete states[topic]);
+            await chrome.storage.local.set({ topicSyncState: states });
+        }
+    });
 }
 
 function setupAlarm() {
@@ -600,9 +642,9 @@ async function updateUnreadBadge() {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'sync') {
         console.log('Sync request received from popup, forcing sync...');
-        syncMissedMessages().then(() => {
-            sendResponse({ success: true });
-        });
+        syncMissedMessages()
+            .then(() => sendResponse({ success: true }))
+            .catch(() => sendResponse({ success: false }));
         return true;
     }
 });
