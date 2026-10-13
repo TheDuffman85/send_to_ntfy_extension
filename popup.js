@@ -83,7 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let draftSaveTimer = null;
 
   const SEND_AS_ZIP_SETTING_KEY = 'sendAsZipEnabled';
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', SEND_AS_ZIP_SETTING_KEY];
+  // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', SEND_AS_ZIP_SETTING_KEY];
   const STORED_FILES_KEY = 'storedFiles';
   const LEGACY_STORED_FILE_KEY = 'storedFile';
 
@@ -113,12 +114,13 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadConfig() {
     try {
       const items = await getFromStorage(STORAGE_KEYS);
+      const accessToken = await NtfyAPI.getAccessToken();
       config.pageUrl = await getPageUrl();
       config = {
         ...config,
         topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
         apiUrl: items.apiUrl || '',
-        accessToken: items.accessToken || '',
+        accessToken: accessToken,
 
         theme: items.theme || 'auto',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
@@ -158,7 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      await saveToStorage(newConfig);
+      const { accessToken, ...syncedSettings } = newConfig;
+      await saveToStorage(syncedSettings);
+      await NtfyAPI.setAccessToken(accessToken);
       config = {
         ...config,
         ...newConfig,
