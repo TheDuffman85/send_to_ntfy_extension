@@ -1175,3 +1175,103 @@ body[data-theme="dark"] .tab-btn:hover {
     color: #f44336;
     background-color: rgba(244, 67, 54, 0.1);
 }
+
+/* ========================================
+   Receive Tab: Topic List
+   ======================================== */
+
+.receive-layout {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.receive-layout .notifications-section {
+    flex: 1;
+    min-width: 0;
+}
+
+.topic-sidebar {
+    flex: 0 0 150px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-right: 8px;
+    border-right: 1px solid var(--border-color);
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.topic-filter-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.topic-filter-btn:hover {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+}
+
+.topic-filter-btn.active {
+    background-color: var(--bg-input);
+    color: var(--primary-light);
+    font-weight: 600;
+}
+
+.topic-filter-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topic-unread-count {
+    flex: none;
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: 9px;
+    background-color: #f44336;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Own window: the lists use the window's height */
+body.window-mode .notifications-list,
+body.window-mode .topic-sidebar {
+    max-height: calc(100vh - 170px);
+}
+
+/* Narrow window: topics in a row above the messages */
+@media (max-width: 479px) {
+    body.window-mode .receive-layout {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.window-mode .topic-sidebar {
+        flex: none;
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 0 0 6px;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    body.window-mode .topic-filter-btn {
+        width: auto;
+        flex: none;
+    }
+}

@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     headerText: document.getElementById('header-text'),
     openUrlBtn: document.getElementById('open-url-btn'),
     settingsBtn: document.getElementById('settings-btn'),
+    popoutBtn: document.getElementById('popout-btn'),
 
     // Main form
     topicSelect: document.getElementById('topic-select'),
@@ -60,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Recent Notifications
     notificationsList: document.getElementById('notifications-list'),
+    topicSidebar: document.getElementById('topic-sidebar'),
 
     // Tabs
     tabButtons: document.querySelectorAll('.tab-btn'),
@@ -85,6 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let readMessageIds = []; // State for read notifications
   let deletedMessageIds = []; // State for deleted notifications (client-side only)
   let activeTab = 'send'; // Active tab state
+  let receiveFilter = 'all'; // Topic shown on the Receive tab, or 'all'
+  // Opened with the pop-out button in its own (resizable) window instead of the toolbar popup
+  const pageParams = new URLSearchParams(location.search);
+  const isWindowMode = pageParams.get('mode') === 'window';
   let currentNotifications = []; // Currently displayed notifications for the active topic
 
   // Drag and drop state
@@ -120,8 +126,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const manifest = chrome.runtime.getManifest();
     elements.headerText.textContent = manifest.name;
 
-    // Set focus on message input when popup opens
-    elements.messageInput.focus();
+    if (isWindowMode) {
+      setupWindowMode();
+    }
+    if (pageParams.get('tab') === 'receive') {
+      switchTab('receive');
+    } else {
+      // Set focus on message input when popup opens
+      elements.messageInput.focus();
+    }
 
     // Trigger initial sync in background
     chrome.runtime.sendMessage({ action: 'sync' });
@@ -513,6 +526,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function getPageUrl() {
+    if (isWindowMode) {
+      // This window isn't a browser tab: use the active tab of the last focused browser window.
+      // Without the "tabs" permission, its URL is readable only on sites the extension may access.
+      try {
+        const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+        const [tab] = await chrome.tabs.query({ active: true, windowId: win.id });
+        return tab?.url || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
     return new Promise((resolve, reject) => {
       chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
         if (chrome.runtime.lastError) {
@@ -597,28 +622,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Tab switching
     elements.tabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        if (tab === activeTab) return;
-
-        activeTab = tab;
-
-        // Update active button class
-        elements.tabButtons.forEach(b => b.classList.toggle('active', b === btn));
-
-        // Update active content class
-        elements.tabContents.forEach(content => {
-          const isTarget = content.id === `tab-content-${tab}`;
-          content.classList.toggle('active', isTarget);
-        });
-
-        // Load notifications on-demand when switching to receive tab
-        if (activeTab === 'receive') {
-          loadNotifications();
-          chrome.runtime.sendMessage({ action: 'sync' });
-        }
-      });
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
+
+    elements.popoutBtn.addEventListener('click', openInWindow);
 
     // Bulk actions
     elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
@@ -659,6 +666,70 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==================
   // View Switching
   // ==================
+
+  function switchTab(tab) {
+    if (tab === activeTab) return;
+
+    activeTab = tab;
+
+    // Update active button class
+    elements.tabButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+
+    // Update active content class
+    elements.tabContents.forEach(content => {
+      const isTarget = content.id === `tab-content-${tab}`;
+      content.classList.toggle('active', isTarget);
+    });
+
+    document.body.classList.toggle('receive-active', tab === 'receive');
+
+    // Load notifications on-demand when switching to receive tab
+    if (activeTab === 'receive') {
+      loadNotifications();
+      chrome.runtime.sendMessage({ action: 'sync' });
+    }
+  }
+
+  // Open this page in its own window, which unlike the toolbar popup can be resized.
+  // Focus that window instead if it is already open.
+  async function openInWindow() {
+    const { popoutWindowId } = await chrome.storage.session.get(['popoutWindowId']);
+    if (popoutWindowId) {
+      try {
+        await chrome.windows.update(popoutWindowId, { focused: true });
+        window.close();
+        return;
+      } catch (e) {
+        // The window was closed
+      }
+    }
+
+    const { windowBounds = {} } = await getFromStorageLocal(['windowBounds']);
+    const win = await chrome.windows.create({
+      url: chrome.runtime.getURL(`popup.html?mode=window&tab=${activeTab}`),
+      type: 'popup',
+      width: windowBounds.width || 760,
+      height: windowBounds.height || 620,
+      left: windowBounds.left,
+      top: windowBounds.top
+    });
+    await chrome.storage.session.set({ popoutWindowId: win.id });
+    window.close();
+  }
+
+  // Remember the window's size and position for the next time it is opened
+  function setupWindowMode() {
+    document.body.classList.add('window-mode');
+    elements.popoutBtn.style.display = 'none';
+
+    const saveBounds = () => {
+      saveToStorageLocal({
+        windowBounds: { width: window.outerWidth, height: window.outerHeight, left: window.screenX, top: window.screenY }
+      }).catch(() => {});
+    };
+    window.addEventListener('resize', debounce(saveBounds, 500));
+    window.addEventListener('beforeunload', saveBounds);
+  }
 
   function showSettingsView() {
     // Populate settings fields with current config
@@ -1082,6 +1153,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = elements.titleInput.value.trim();
 
     let message = rawMessage;
+    if (isWindowMode) {
+      // The window stays open while the user browses: read the tab now
+      config.pageUrl = await getPageUrl();
+    }
     if (config.includeUrl && config.pageUrl) {
       const formattedUrl = config.pageUrl.replace(/\/$/, '');
       if (rawMessage) {
@@ -1154,8 +1229,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       updatePriorityUI();
 
-      // Close the popup unless "Send another" is checked
-      if (!elements.sendAnotherCheckbox.checked) {
+      // Close the popup unless "Send another" is checked (the separate window stays open)
+      if (!elements.sendAnotherCheckbox.checked && !isWindowMode) {
         setTimeout(() => window.close(), 100);
       } else {
         // Only show success message if staying open
@@ -1298,14 +1373,19 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    elements.notificationsList.innerHTML = '<div class="notifications-loading">Loading notifications...</div>';
-
     try {
       const localData = await getFromStorageLocal(['receivedNotifications']);
-      const allNotifications = localData.receivedNotifications || [];
-
-      const notifications = allNotifications
+      const allNotifications = (localData.receivedNotifications || [])
         .filter(notification => !deletedMessageIds.includes(notification.id));
+
+      if (receiveFilter !== 'all' && !config.topics.includes(receiveFilter)) {
+        receiveFilter = 'all';
+      }
+      renderTopicSidebar(allNotifications);
+
+      const notifications = receiveFilter === 'all'
+        ? allNotifications
+        : allNotifications.filter(notification => notification.topic === receiveFilter);
 
       // Save currently visible notifications for bulk actions
       currentNotifications = notifications;
@@ -1410,6 +1490,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Topic list of the Receive tab: All topics, then each configured topic, with unread counts
+  function renderTopicSidebar(notifications) {
+    const unreadCount = topic => notifications
+      .filter(notification => topic === 'all' || notification.topic === topic)
+      .filter(notification => !readMessageIds.includes(notification.id))
+      .length;
+
+    const entries = ['all', ...config.topics];
+    elements.topicSidebar.replaceChildren(...entries.map(topic => {
+      const btn = document.createElement('button');
+      btn.className = 'topic-filter-btn';
+      btn.classList.toggle('active', topic === receiveFilter);
+
+      const name = document.createElement('span');
+      name.className = 'topic-filter-name';
+      name.textContent = topic === 'all' ? 'All topics' : topic;
+      btn.appendChild(name);
+
+      const count = unreadCount(topic);
+      if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'topic-unread-count';
+        badge.textContent = count;
+        btn.appendChild(badge);
+      }
+
+      btn.addEventListener('click', () => {
+        receiveFilter = topic;
+        saveToStorageLocal({ receiveTopicFilter: topic }).catch(() => {});
+        loadNotifications();
+      });
+      return btn;
+    }));
+  }
+
   function formatTime(unixTimestamp) {
     const date = new Date(unixTimestamp * 1000);
     const now = new Date();
@@ -1430,9 +1545,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadLocalState() {
     try {
-      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds']);
+      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds', 'receiveTopicFilter']);
       readMessageIds = result.readMessageIds || [];
       deletedMessageIds = result.deletedMessageIds || [];
+      receiveFilter = result.receiveTopicFilter || 'all';
     } catch (error) {
       console.error('Error loading local state:', error);
     }
@@ -1527,7 +1643,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function handleDeleteAll() {
     if (currentNotifications.length === 0) return;
 
-    if (!confirm('Are you sure you want to delete all notifications?')) {
+    const scope = receiveFilter === 'all' ? '' : ` in topic "${receiveFilter}"`;
+    if (!confirm(`Are you sure you want to delete all notifications${scope}?`)) {
       return;
     }
 
