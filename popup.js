@@ -88,9 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let deletedMessageIds = []; // State for deleted notifications (client-side only)
   let activeTab = 'send'; // Active tab state
   let receiveFilter = 'all'; // Topic shown on the Receive tab, or 'all'
-  // Opened with the pop-out button in its own (resizable) window instead of the toolbar popup
+  // Opened with the header button in a browser tab instead of the toolbar popup
   const pageParams = new URLSearchParams(location.search);
-  const isWindowMode = pageParams.get('mode') === 'window';
+  const isPageMode = pageParams.get('mode') === 'page';
   let currentNotifications = []; // Currently displayed notifications for the active topic
 
   // Drag and drop state
@@ -126,8 +126,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const manifest = chrome.runtime.getManifest();
     elements.headerText.textContent = manifest.name;
 
-    if (isWindowMode) {
-      setupWindowMode();
+    if (isPageMode) {
+      document.body.classList.add('page-mode');
+      elements.popoutBtn.style.display = 'none';
     }
     if (pageParams.get('tab') === 'receive') {
       switchTab('receive');
@@ -526,16 +527,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function getPageUrl() {
-    if (isWindowMode) {
-      // This window isn't a browser tab: use the active tab of the last focused browser window.
-      // Without the "tabs" permission, its URL is readable only on sites the extension may access.
-      try {
-        const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
-        const [tab] = await chrome.tabs.query({ active: true, windowId: win.id });
-        return tab?.url || '';
-      } catch (e) {
-        return '';
-      }
+    if (isPageMode) {
+      // The active tab is this page itself, not a page the user browses
+      return '';
     }
 
     return new Promise((resolve, reject) => {
@@ -625,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    elements.popoutBtn.addEventListener('click', openInWindow);
+    elements.popoutBtn.addEventListener('click', openInTab);
 
     // Bulk actions
     elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
@@ -690,45 +684,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Open this page in its own window, which unlike the toolbar popup can be resized.
-  // Focus that window instead if it is already open.
-  async function openInWindow() {
-    const { popoutWindowId } = await chrome.storage.session.get(['popoutWindowId']);
-    if (popoutWindowId) {
-      try {
-        await chrome.windows.update(popoutWindowId, { focused: true });
+  // Open this page in a browser tab, which unlike the toolbar popup can be any size.
+  // Switch to that tab instead if it is already open (runtime.getContexts: Chrome 116+).
+  async function openInTab() {
+    const pageUrl = chrome.runtime.getURL('popup.html?mode=page');
+    if (chrome.runtime.getContexts) {
+      const contexts = await chrome.runtime.getContexts({ contextTypes: ['TAB'] });
+      const open = contexts.find(context => context.documentUrl && context.documentUrl.startsWith(pageUrl));
+      if (open) {
+        await chrome.tabs.update(open.tabId, { active: true });
+        await chrome.windows.update(open.windowId, { focused: true });
         window.close();
         return;
-      } catch (e) {
-        // The window was closed
       }
     }
 
-    const { windowBounds = {} } = await getFromStorageLocal(['windowBounds']);
-    const win = await chrome.windows.create({
-      url: chrome.runtime.getURL(`popup.html?mode=window&tab=${activeTab}`),
-      type: 'popup',
-      width: windowBounds.width || 760,
-      height: windowBounds.height || 620,
-      left: windowBounds.left,
-      top: windowBounds.top
-    });
-    await chrome.storage.session.set({ popoutWindowId: win.id });
+    await chrome.tabs.create({ url: `${pageUrl}&tab=${activeTab}` });
     window.close();
-  }
-
-  // Remember the window's size and position for the next time it is opened
-  function setupWindowMode() {
-    document.body.classList.add('window-mode');
-    elements.popoutBtn.style.display = 'none';
-
-    const saveBounds = () => {
-      saveToStorageLocal({
-        windowBounds: { width: window.outerWidth, height: window.outerHeight, left: window.screenX, top: window.screenY }
-      }).catch(() => {});
-    };
-    window.addEventListener('resize', debounce(saveBounds, 500));
-    window.addEventListener('beforeunload', saveBounds);
   }
 
   function showSettingsView() {
@@ -1153,10 +1125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = elements.titleInput.value.trim();
 
     let message = rawMessage;
-    if (isWindowMode) {
-      // The window stays open while the user browses: read the tab now
-      config.pageUrl = await getPageUrl();
-    }
     if (config.includeUrl && config.pageUrl) {
       const formattedUrl = config.pageUrl.replace(/\/$/, '');
       if (rawMessage) {
@@ -1229,8 +1197,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       updatePriorityUI();
 
-      // Close the popup unless "Send another" is checked (the separate window stays open)
-      if (!elements.sendAnotherCheckbox.checked && !isWindowMode) {
+      // Close the popup unless "Send another" is checked (the tab stays open)
+      if (!elements.sendAnotherCheckbox.checked && !isPageMode) {
         setTimeout(() => window.close(), 100);
       } else {
         // Only show success message if staying open
