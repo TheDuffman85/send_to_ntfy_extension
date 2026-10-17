@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     topicDropdownText: document.getElementById('topic-dropdown-text'),
     topicDropdownOptions: document.getElementById('topic-dropdown-options'),
     titleInput: document.getElementById('title-input'),
+    tabUrlBtn: document.getElementById('tab-url-btn'),
     messageInput: document.getElementById('message-input'),
     tagsContainer: document.getElementById('tags-container'),
     newTagInput: document.getElementById('new-tag-input'),
@@ -91,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Opened with the header button in a browser tab instead of the toolbar popup
   const pageParams = new URLSearchParams(location.search);
   const isPageMode = pageParams.get('mode') === 'page';
+  let autoTitle = ''; // The tab URL last put in the Title field automatically
   let currentNotifications = []; // Currently displayed notifications for the active topic
 
   // Drag and drop state
@@ -129,7 +131,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isPageMode) {
       document.body.classList.add('page-mode');
       elements.popoutBtn.style.display = 'none';
+      elements.tabUrlBtn.style.display = '';
+      // Coming back to this tab: the user may have moved on to another page
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible') {
+          config.pageUrl = await getPageUrl();
+          applyUrlTitle();
+        }
+      });
     }
+    applyUrlTitle();
     if (pageParams.get('tab') === 'receive') {
       switchTab('receive');
     } else {
@@ -526,10 +537,57 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Reading another tab's URL needs the optional "tabs" permission (asked for by the "Use tab URL" button)
+  async function getLastBrowsingTabUrl() {
+    try {
+      if (!(await chrome.permissions.contains({ permissions: ['tabs'] }))) {
+        return '';
+      }
+      const own = await chrome.tabs.getCurrent();
+      const tabs = await chrome.tabs.query({ windowType: 'normal' });
+      const pages = tabs.filter(tab => tab.id !== own?.id && NtfyAPI.isHttpUrl(tab.url));
+      pages.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+      return pages[0]?.url || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // "Include current tab's URL" puts the URL in the Title field, where it can still be edited.
+  // A title the user typed is left alone.
+  function applyUrlTitle() {
+    const current = elements.titleInput.value.trim();
+    if (current && current !== autoTitle) {
+      return;
+    }
+
+    const url = config.includeUrl && NtfyAPI.isHttpUrl(config.pageUrl) ? config.pageUrl.replace(/\/$/, '') : '';
+    elements.titleInput.value = url;
+    autoTitle = url;
+  }
+
+  function useTabUrl() {
+    // Called directly from the click: permissions.request needs a user gesture
+    chrome.permissions.request({ permissions: ['tabs'] }, async (granted) => {
+      if (!granted) {
+        showStatus('Allow reading tabs to use the tab URL', 'warning');
+        return;
+      }
+      const url = await getLastBrowsingTabUrl();
+      if (!url) {
+        showStatus('No web page tab found', 'warning');
+        return;
+      }
+      config.pageUrl = url;
+      elements.titleInput.value = url.replace(/\/$/, '');
+      autoTitle = elements.titleInput.value;
+    });
+  }
+
   async function getPageUrl() {
     if (isPageMode) {
-      // The active tab is this page itself, not a page the user browses
-      return '';
+      // The active tab is this page itself: use the web page tab the user was on last
+      return getLastBrowsingTabUrl();
     }
 
     return new Promise((resolve, reject) => {
@@ -620,6 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.popoutBtn.addEventListener('click', openInTab);
+    elements.tabUrlBtn.addEventListener('click', useTabUrl);
 
     // Bulk actions
     elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
@@ -735,6 +794,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Refresh UI to reflect any changes made in settings
     updateUI();
+    applyUrlTitle();
   }
 
   // ==================
@@ -1124,15 +1184,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawMessage = elements.messageInput.value.trim();
     const title = elements.titleInput.value.trim();
 
-    let message = rawMessage;
-    if (config.includeUrl && config.pageUrl) {
-      const formattedUrl = config.pageUrl.replace(/\/$/, '');
-      if (rawMessage) {
-        message = `${rawMessage}\n\nSent from: ${formattedUrl}`;
-      } else {
-        message = `Sent from: ${formattedUrl}`;
-      }
-    }
+    // With "Include current tab's URL", the URL is in the title (applyUrlTitle)
+    const message = rawMessage;
     const tagsString = tags.join(','); // Use tags array
 
     const storedFile = await new Promise((resolve) => {
@@ -1190,6 +1243,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       elements.messageInput.value = '';
       elements.titleInput.value = '';
+      autoTitle = '';
+      applyUrlTitle();
 
       await removeFile();
       // Clear any saved draft state so it doesn't overwrite preferences next time

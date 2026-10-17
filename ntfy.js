@@ -248,9 +248,11 @@ const NtfyAPI = {
      * @param {Object} config - Configuration object
      * @param {string} topic - Topic to send to
      * @param {string} imageUrl - URL of the image to fetch and send
+     * @param {string} [message] - Optional message
+     * @param {string} [title] - Optional title
      * @returns {Promise<Response>}
      */
-    async sendImageFromUrl(config, topic, imageUrl, message) {
+    async sendImageFromUrl(config, topic, imageUrl, message, title) {
         // Fetch the image
         const imageResponse = await fetch(imageUrl);
         if (!imageResponse.ok) {
@@ -277,7 +279,7 @@ const NtfyAPI = {
             filename = 'image.png';
         }
 
-        return this.sendAttachment(config, topic, { data: imageBuffer, filename, message });
+        return this.sendAttachment(config, topic, { data: imageBuffer, filename, message, title });
     },
 
     /**

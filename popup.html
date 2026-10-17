@@ -106,7 +106,11 @@
 
         <!-- Title (Optional) -->
         <div class="form-group">
-          <label class="form-label" for="title-input">Title</label>
+          <div class="form-label-row">
+            <label class="form-label" for="title-input">Title</label>
+            <button class="link-btn" id="tab-url-btn" style="display: none;"
+              title="Use the URL of the web page tab you were on last">🔗 Use tab URL</button>
+          </div>
           <input type="text" class="form-input" id="title-input">
         </div>
 
@@ -232,7 +236,7 @@
           <input type="checkbox" id="include-url-checkbox">
           <label for="include-url-checkbox">Include current tab's URL</label>
         </div>
-        <p class="form-hint">Append the active tab's URL to the message</p>
+        <p class="form-hint">Put the active tab's URL in the title</p>
       </div>
 
       <div class="form-group">

@@ -250,24 +250,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     try {
         if (menuId === SEND_SELECTION_ID || menuId.startsWith(SEND_SELECTION_ID)) {
-            // Send selected text
-            let message = info.selectionText;
-            if (config.includeUrl && tab && tab.url) {
-                const formattedUrl = tab.url.replace(/\/$/, '');
-                message = `${message}\n\nSent from: ${formattedUrl}`;
-            }
+            // Send selected text, with the page URL as title if enabled
             await NtfyAPI.sendNotification(config, topic, {
-                message: message
+                message: info.selectionText,
+                title: pageUrlTitle(config, tab)
             });
             showBadge('✓', '#4CAF50');
         } else if (menuId === SEND_IMAGE_ID || menuId.startsWith(SEND_IMAGE_ID)) {
-            // Send image
-            let message = '';
-            if (config.includeUrl && tab && tab.url) {
-                const formattedUrl = tab.url.replace(/\/$/, '');
-                message = `Sent from: ${formattedUrl}`;
-            }
-            await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl, message);
+            // Send image, with the page URL as title if enabled
+            await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl, '', pageUrlTitle(config, tab));
             showBadge('✓', '#4CAF50');
         } else if (menuId === SEND_LINK_ID || menuId.startsWith(SEND_LINK_ID)) {
             // Send link URL
@@ -323,6 +314,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         showBadge('✗', '#f44336');
     }
 });
+
+// "Include current tab's URL": the page URL, used as the message title
+function pageUrlTitle(config, tab) {
+    return config.includeUrl && tab && tab.url ? tab.url.replace(/\/$/, '') : '';
+}
 
 // Show a temporary badge on the extension icon
 // Show a temporary badge on the extension icon (restores unread count after 2s)
