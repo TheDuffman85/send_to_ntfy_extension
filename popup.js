@@ -1414,7 +1414,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentNotifications = notifications;
 
       // Show control bar only if there are notifications to manage
-      elements.notificationsControlBar.style.display = notifications.length > 0 ? 'flex' : 'none';
+      elements.notificationsControlBar.style.visibility = notifications.length > 0 ? 'visible' : 'hidden'; // Keeps its space, so the heading doesn't move
 
       elements.notificationsList.innerHTML = '';
 
