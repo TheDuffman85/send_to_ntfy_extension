@@ -1290,10 +1290,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Recent Notifications
   // ==================
 
+  // Lists the received messages of all topics, like the unread badge counts them. (Filtering by the
+  // Send tab's topic hid everything when that topic was one the token can only send to.)
   async function loadNotifications() {
-    const topic = elements.topicSelect.value;
-    if (!topic || !config.apiUrl) {
-      elements.notificationsList.innerHTML = '<div class="notifications-empty">Configure server and select a topic to view notifications</div>';
+    if (!config.apiUrl || config.topics.length === 0) {
+      elements.notificationsList.innerHTML = '<div class="notifications-empty">Configure server and topics to view notifications</div>';
       return;
     }
 
@@ -1304,7 +1305,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const allNotifications = localData.receivedNotifications || [];
 
       const notifications = allNotifications
-        .filter(notification => notification.topic === topic)
         .filter(notification => !deletedMessageIds.includes(notification.id));
 
       // Save currently visible notifications for bulk actions
@@ -1343,7 +1343,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const time = document.createElement('span');
         time.className = 'notification-time';
-        time.textContent = formatTime(notification.time);
+        time.textContent = `${notification.topic} · ${formatTime(notification.time)}`;
         header.appendChild(time);
 
         item.appendChild(header);
@@ -1527,8 +1527,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function handleDeleteAll() {
     if (currentNotifications.length === 0) return;
 
-    const topic = elements.topicSelect.value;
-    if (!confirm(`Are you sure you want to delete all notifications in topic "${topic}"?`)) {
+    if (!confirm('Are you sure you want to delete all notifications?')) {
       return;
     }
 
