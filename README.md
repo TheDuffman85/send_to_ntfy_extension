@@ -1,29 +1,26 @@
-# <img src="icons/icon48.png" alt="Logo" width="40" height="40" style="vertical-align: middle;"> Ntfy for Chrome
+# <img src="icons/icon48.png" alt="Logo" width="40" height="40" style="vertical-align: middle;"> Send to ntfy
 
 [![Build Extension](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml/badge.svg)](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml)
 
-A browser extension to send and receive notifications to/from [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
+A browser extension to send notifications to, and receive them from, [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
 
 > [!NOTE]
 > This is an unofficial extension and is not affiliated with the ntfy.sh project.
 
 ## Features
 
-- **Send Notifications**:
-  - **Context Menu**: Right-click to send selected text, images, or the current page URL directly to ntfy.
-  - **File Upload**: Easily upload and send files to your ntfy topics.
-  - **Quick Sharing**: Send the current page URL or custom text to your ntfy topics.
-- **Receive & Manage Notifications**:
-  - **Notifications List**: View recent cached notifications for your selected topic directly in the popup.
-  - **Interactive Actions**: Mark notifications as read (local-only fading effect) or delete them (client-side hide) instantly.
-  - **Refresh**: Manually reload notifications to get the latest updates.
-- **General**:
-  - **Keyboard Shortcuts**: Send messages quickly with `Right Ctrl + Enter`.
-  - **Custom Configuration**: Support for self-hosted ntfy servers.
-  - **Authentication**: Optional support for token-based authentication.
-  - **Privacy First**: No tracking, local storage is used for notification states.
-  - **Modern UI**: Clean interface with Dark Mode support.
-  - **Cross-Browser**: Supports Chrome, Firefox, and Edge (Manifest V3).
+- **Context Menu**: Right-click to send selected text, images, or the current page URL directly to ntfy.
+- **File Upload**: Select multiple files and send them as separate notifications or one ZIP to your ntfy topics.
+- **Quick Sharing**: Send the current page URL or custom text to your ntfy topics.
+- **Receive Notifications**: Messages from your topics arrive live (WebSocket) as desktop notifications, with an unread count on the icon. Messages published while the browser was closed are fetched when it starts.
+- **Received Messages List**: The Receive tab lists the messages of all topics, with a topic list to filter them, unread counts, and mark-as-read and delete actions (stored locally).
+- **Open in a Tab**: Open the extension in a browser tab for a larger view.
+- **Keyboard Shortcuts**: Send messages quickly with `Right Ctrl + Enter`.
+- **Custom Configuration**: Support for self-hosted ntfy servers.
+- **Authentication**: Optional support for token-based authentication.
+- **Privacy First**: No tracking; received messages and their read state are stored locally.
+- **Modern UI**: Clean interface with Dark Mode support.
+- **Cross-Browser**: Supports Chrome, Firefox, and Edge (Manifest V3).
 
 ## Installation
 
@@ -45,10 +42,13 @@ A browser extension to send and receive notifications to/from [ntfy.sh](https://
 Access the extension settings to configure your preferences:
 
 1. **ntfy Server**: Default is `https://ntfy.sh`, but you can change this to your self-hosted instance.
-2. **Topic**: Set your default target topic. The extension receives from the topics your credentials can read; a topic you can only send to is used for sending only.
+2. **Topics**: Add the topics to send to. The extension receives from the topics your credentials can read; a topic you can only send to is used for sending only.
 3. **Authentication**: If your server requires it, enter your Access Token. It is stored locally and is not copied to other browsers by browser sync. With a token (or credentials in the server URL), click **Allow access to this server** in the settings: ntfy's CORS headers don't allow the `Authorization` header, so the extension needs permission for the server's site.
-4. **Priorities**: Choose a default priority level or adjust it per message.
-5. **Tags**: Add tags to your notifications for better organization.
+4. **Include current tab's URL**: Puts the page URL in the message title. In the extension's tab, **Use tab URL** fills in the page you were on last (it asks once for permission to read tabs).
+5. **Priorities**: Choose a default priority level or adjust it per message.
+6. **Tags**: Add tags to your notifications for better organization.
+
+When multiple files are attached, the extension sends them as separate notifications by default. Enable **Send files as one ZIP** below the attachment list to send all of them in one ZIP attachment instead. The preference is remembered and can be switched at any time.
 
 ## Development
 
@@ -70,5 +70,6 @@ The build output will be placed in the `build/` directory.
 <p align="left">
   <img src="screenshots/1.png" width="280" alt="Main view"><br><br>
   <img src="screenshots/2.png" width="280" alt="Settings view"><br><br>
-  <img src="screenshots/3.png" width="280" alt="Dark mode">
+  <img src="screenshots/3.png" width="280" alt="Dark mode"><br><br>
+  <img src="screenshots/receive.png" width="420" alt="Receive tab with the topic list">
 </p>

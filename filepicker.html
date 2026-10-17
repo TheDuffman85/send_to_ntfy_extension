@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Attach a file</title>
+    <title>Attach files - Send to ntfy</title>
     <link rel="stylesheet" href="styles.css">
     <style>
         /* Filepicker layout overrides */
@@ -47,21 +47,21 @@
     <div class="header">
         <div class="header-title">
             <img src="icons/icon48.png" alt="ntfy">
-            <span>Attach a file</span>
+            <span>Attach files</span>
         </div>
     </div>
 
     <!-- Main Content -->
     <div class="main-content">
-        <p class="subtitle">Select or drop a file to attach to your notification</p>
+        <p class="subtitle">Select or drop files to attach to your notifications</p>
 
         <div class="drop-zone" id="drop-zone">
             <div class="drop-zone-icon">📎</div>
-            <div class="drop-zone-text">Drop file here</div>
+            <div class="drop-zone-text">Drop files here</div>
             <div class="drop-zone-hint">or click to browse</div>
         </div>
 
-        <input type="file" id="file-input" class="file-input">
+        <input type="file" id="file-input" class="file-input" multiple>
 
         <div class="status" id="status"></div>
     </div>

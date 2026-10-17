@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "116",
-  "name": "Ntfy for Chrome",
-  "version": "3.1.2",
-  "description": "Send and receive notifications to/from your ntfy topics with file attachments, priority, tags, and local history management.",
+  "name": "Send to ntfy",
+  "version": "2.3.4",
+  "description": "Send and receive ntfy notifications: file attachments, priority, tags, and a list of received messages",
   "permissions": [
     "activeTab",
     "storage",

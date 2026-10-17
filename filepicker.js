@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('file-input');
     const dropZone = document.getElementById('drop-zone');
     const status = document.getElementById('status');
+    const storedFilesKey = 'storedFiles';
+    const legacyStoredFileKey = 'storedFile';
 
     // Apply theme
     const urlParams = new URLSearchParams(window.location.search);
@@ -34,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const files = e.dataTransfer.files;
         if (files.length > 0) {
-            processFile(files[0]);
+            processFiles(Array.from(files));
         }
     });
 
@@ -48,60 +50,90 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            processFile(file);
-        }
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        processFiles(files);
     });
 
-    async function processFile(file) {
+    function getStoredFiles() {
+        return new Promise((resolve, reject) => {
+            chrome.storage.local.get([storedFilesKey, legacyStoredFileKey], (result) => {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                    return;
+                }
+
+                let storedFiles = Array.isArray(result[storedFilesKey])
+                    ? result[storedFilesKey]
+                    : [];
+
+                if (storedFiles.length === 0 && result[legacyStoredFileKey]) {
+                    storedFiles = [result[legacyStoredFileKey]];
+                }
+
+                resolve(storedFiles);
+            });
+        });
+    }
+
+    function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+                resolve({
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    data: event.target.result
+                });
+            };
+
+            reader.onerror = () => reject(new Error(`Failed to read "${file.name}"`));
+            reader.onabort = () => reject(new Error(`Reading "${file.name}" was cancelled`));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function storeFiles(files) {
+        return new Promise((resolve, reject) => {
+            chrome.storage.local.set({ [storedFilesKey]: files }, () => {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                    return;
+                }
+
+                chrome.storage.local.remove([legacyStoredFileKey], () => {
+                    if (chrome.runtime.lastError) {
+                        reject(chrome.runtime.lastError);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+        });
+    }
+
+    async function processFiles(files) {
+        if (files.length === 0) return;
+
         dropZone.style.pointerEvents = 'none';
         dropZone.style.opacity = '0.6';
 
         try {
-            const reader = new FileReader();
+            // Read the whole selection before writing so a read error does not append a partial batch.
+            const newFiles = await Promise.all(files.map(readFileAsDataUrl));
+            const existingFiles = await getStoredFiles();
+            await storeFiles([...existingFiles, ...newFiles]);
 
-            reader.onload = async (event) => {
-                try {
-                    const base64Data = event.target.result;
+            const fileCount = files.length;
+            status.textContent = `✓ ${fileCount} file${fileCount === 1 ? '' : 's'} attached!`;
+            status.className = 'status visible success';
 
-                    // Use chrome.storage.local for larger files
-                    await new Promise((resolve, reject) => {
-                        chrome.storage.local.set({
-                            storedFile: {
-                                name: file.name,
-                                type: file.type,
-                                size: file.size,
-                                data: base64Data
-                            }
-                        }, () => {
-                            if (chrome.runtime.lastError) {
-                                reject(chrome.runtime.lastError);
-                            } else {
-                                resolve();
-                            }
-                        });
-                    });
-
-                    status.textContent = `✓ "${file.name}" attached!`;
-                    status.className = 'status visible success';
-
-                    // Close window after short delay
-                    setTimeout(() => {
-                        window.close();
-                    }, 800);
-
-                } catch (err) {
-                    showError('Error: ' + err.message);
-                }
-            };
-
-            reader.onerror = () => {
-                showError('Failed to read file');
-            };
-
-            reader.readAsDataURL(file);
-
+            // Close window after short delay
+            setTimeout(() => {
+                window.close();
+            }, 800);
         } catch (error) {
             showError('Error: ' + error.message);
         }

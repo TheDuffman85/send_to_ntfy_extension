@@ -8,14 +8,12 @@ try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
     if (target === 'firefox') {
-        manifest.name = "Ntfy for Firefox";
         // Firefox requires background.scripts instead of background.service_worker
         if (manifest.background && manifest.background.service_worker) {
             manifest.background.scripts = ['ntfy.js', manifest.background.service_worker];
             delete manifest.background.service_worker;
         }
     } else if (target === 'chrome') {
-        manifest.name = "Ntfy for Chrome";
         // Chrome doesn't support browser_specific_settings
         if (manifest.browser_specific_settings) {
             delete manifest.browser_specific_settings;

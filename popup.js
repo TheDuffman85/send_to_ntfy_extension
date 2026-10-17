@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const elements = {
     // Views
     mainView: document.getElementById('main-view'),
+    mainContent: document.getElementById('main-content'), // Send tab form
     settingsView: document.getElementById('settings-view'),
 
     // Header
@@ -30,9 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     fileInput: document.getElementById('file-input'),
     fileBtn: document.getElementById('file-btn'),
     filePreview: document.getElementById('file-preview'),
-    fileName: document.getElementById('file-name'),
-    fileSize: document.getElementById('file-size'),
-    fileRemove: document.getElementById('file-remove'),
+    zipToggle: document.getElementById('zip-toggle'),
+    zipCheckbox: document.getElementById('zip-checkbox'),
 
     // Priority & Theme chips
     priorityChips: document.getElementById('priority-chips'),
@@ -81,7 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
     accessToken: '',
 
     theme: 'auto',
-    pageUrl: ''
+    pageUrl: '',
+    sendAsZipEnabled: false
   };
 
   let tags = []; // State for tags
@@ -94,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const isPageMode = pageParams.get('mode') === 'page';
   let autoTitle = ''; // The tab URL last put in the Title field automatically
   let currentNotifications = []; // Currently displayed notifications for the active topic
+  let attachments = [];
 
   // Drag and drop state
   let dragSrcIndex = null;
@@ -103,9 +105,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let isSettingsView = false;
   let serverAccessMissing = false;
   let rightCtrlDown = false;
+  let isSending = false;
+  let draftSaveTimer = null;
 
+  const SEND_AS_ZIP_SETTING_KEY = 'sendAsZipEnabled';
   // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl'];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl', SEND_AS_ZIP_SETTING_KEY];
+  const STORED_FILES_KEY = 'storedFiles';
+  const LEGACY_STORED_FILE_KEY = 'storedFile';
 
   // Initialize
   init();
@@ -113,9 +120,9 @@ document.addEventListener('DOMContentLoaded', () => {
   async function init() {
     await loadConfig();
     await loadLocalState();
-    await restoreDraftState();
     await checkSessionAndCleanup(); // Check session and cleanup old files if needed
-    await loadStoredFile();
+    await restoreDraftState();
+    await loadStoredFiles();
     setupEventListeners();
     await updateServerAccessUI(config.apiUrl, config.accessToken);
     updateUI();
@@ -169,12 +176,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         theme: items.theme || 'auto',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
-        includeUrl: items.includeUrl === true
+        includeUrl: items.includeUrl === true,
+        sendAsZipEnabled: items[SEND_AS_ZIP_SETTING_KEY] === true
       };
 
       // Restore 'Send another' checkbox state
       elements.sendAnotherCheckbox.checked = config.sendAnotherEnabled;
       elements.includeUrlCheckbox.checked = config.includeUrl;
+      elements.zipCheckbox.checked = config.sendAsZipEnabled;
 
       if (items.priority) {
         selectedPriority = items.priority;
@@ -201,7 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
       theme: config.theme,
-      includeUrl: elements.includeUrlCheckbox.checked
+      includeUrl: elements.includeUrlCheckbox.checked,
+      sendAsZipEnabled: config.sendAsZipEnabled
     };
 
     try {
@@ -316,21 +326,175 @@ document.addEventListener('DOMContentLoaded', () => {
   // File Handling
   // ==================
 
-  async function loadStoredFile() {
-    try {
-      const result = await new Promise(resolve => {
-        chrome.storage.local.get(['storedFile'], resolve);
+  function getLocalStorage(keys) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get(keys, items => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(items);
+        }
       });
+    });
+  }
 
-      if (result.storedFile) {
-        elements.fileName.textContent = result.storedFile.name;
-        elements.fileSize.textContent = formatFileSize(result.storedFile.size);
-        elements.filePreview.classList.add('visible');
-        elements.fileBtn.style.display = 'none';
-      }
-    } catch (error) {
-      console.error('Error loading stored file:', error);
+  function setLocalStorage(data) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  function removeLocalStorage(keys) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.remove(keys, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  async function readStoredFiles() {
+    const result = await getLocalStorage([STORED_FILES_KEY, LEGACY_STORED_FILE_KEY]);
+    let files = Array.isArray(result[STORED_FILES_KEY]) ? result[STORED_FILES_KEY] : [];
+
+    // Keep a pending attachment created by an older extension version.
+    if (files.length === 0 && result[LEGACY_STORED_FILE_KEY]) {
+      files = [result[LEGACY_STORED_FILE_KEY]];
+      await setLocalStorage({ [STORED_FILES_KEY]: files });
+      await removeLocalStorage([LEGACY_STORED_FILE_KEY]);
+    } else if (result[LEGACY_STORED_FILE_KEY]) {
+      await removeLocalStorage([LEGACY_STORED_FILE_KEY]);
     }
+
+    return files;
+  }
+
+  async function persistStoredFiles(files) {
+    if (files.length > 0) {
+      await setLocalStorage({ [STORED_FILES_KEY]: files });
+      await removeLocalStorage([LEGACY_STORED_FILE_KEY]);
+    } else {
+      await removeLocalStorage([STORED_FILES_KEY, LEGACY_STORED_FILE_KEY]);
+    }
+  }
+
+  async function loadStoredFiles() {
+    try {
+      attachments = await readStoredFiles();
+      renderAttachments();
+    } catch (error) {
+      console.error('Error loading stored files:', error);
+      attachments = [];
+      renderAttachments();
+    }
+  }
+
+  function renderAttachments() {
+    elements.filePreview.innerHTML = '';
+    elements.filePreview.classList.toggle('visible', attachments.length > 0);
+    elements.mainContent.classList.toggle('has-multiple-attachments', attachments.length > 1);
+    elements.fileBtn.textContent = attachments.length > 0
+      ? `📎 Attach files (${attachments.length})`
+      : '📎 Attach files';
+
+    attachments.forEach((file, index) => {
+      const preview = document.createElement('div');
+      preview.className = 'file-preview-item';
+
+      const icon = document.createElement('span');
+      icon.className = 'file-icon';
+      icon.textContent = '📄';
+
+      const info = document.createElement('div');
+      info.className = 'file-info';
+
+      const name = document.createElement('div');
+      name.className = 'file-name';
+      name.textContent = file.name;
+
+      const size = document.createElement('div');
+      size.className = 'file-size';
+      size.textContent = formatFileSize(file.size);
+
+      info.appendChild(name);
+      info.appendChild(size);
+
+      const removeButton = document.createElement('button');
+      removeButton.className = 'file-remove';
+      removeButton.dataset.index = index;
+      removeButton.title = `Remove ${file.name}`;
+      removeButton.setAttribute('aria-label', `Remove ${file.name}`);
+      removeButton.textContent = '×';
+      removeButton.disabled = isSending;
+
+      preview.appendChild(icon);
+      preview.appendChild(info);
+      preview.appendChild(removeButton);
+      elements.filePreview.appendChild(preview);
+    });
+
+    elements.fileBtn.disabled = isSending;
+    elements.fileInput.disabled = isSending;
+    updateZipToggleUI();
+  }
+
+  function updateZipToggleUI() {
+    const canSendAsZip = attachments.length > 1;
+
+    elements.zipToggle.classList.toggle('visible', canSendAsZip);
+    elements.zipToggle.classList.toggle('disabled', isSending);
+    elements.zipCheckbox.disabled = isSending || !canSendAsZip;
+    elements.zipCheckbox.checked = canSendAsZip && config.sendAsZipEnabled;
+  }
+
+  function handleZipToggleChange() {
+    if (attachments.length < 2) {
+      elements.zipCheckbox.checked = false;
+      return;
+    }
+
+    config.sendAsZipEnabled = elements.zipCheckbox.checked;
+    saveToStorage({ [SEND_AS_ZIP_SETTING_KEY]: config.sendAsZipEnabled }).catch(error => {
+      console.error('Error saving ZIP preference:', error);
+    });
+  }
+
+  async function appendStoredFiles(newFiles) {
+    if (newFiles.length === 0) return;
+
+    const existingFiles = await readStoredFiles();
+    const updatedFiles = [...existingFiles, ...newFiles];
+    await persistStoredFiles(updatedFiles);
+    attachments = updatedFiles;
+    renderAttachments();
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = event => {
+        resolve({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          data: event.target.result
+        });
+      };
+
+      reader.onerror = () => reject(new Error(`Failed to read "${file.name}"`));
+      reader.onabort = () => reject(new Error(`Reading "${file.name}" was cancelled`));
+      reader.readAsDataURL(file);
+    });
   }
 
   async function checkSessionAndCleanup() {
@@ -338,14 +502,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Files are stored in 'local' (large quota).
     // Session state is tracked in 'session'.
     // If 'sessionActive' is missing from 'session' storage, it means the browser restarted.
-    // In that case, we clear the file from 'local' storage.
+    // In that case, clear the files and draft from 'local' storage.
 
     try {
       const session = await new Promise(resolve => chrome.storage.session.get(['sessionActive'], resolve));
 
       if (!session.sessionActive) {
-        console.log('New session detected, cleaning up stored file');
-        await new Promise(resolve => chrome.storage.local.remove(['storedFile'], resolve));
+        console.log('New session detected, cleaning up stored files and draft');
+        await removeLocalStorage([STORED_FILES_KEY, LEGACY_STORED_FILE_KEY, 'draftState']);
         await new Promise(resolve => chrome.storage.session.set({ sessionActive: true }, resolve));
       }
     } catch (error) {
@@ -354,8 +518,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function handleFileButtonClick() {
+    if (isSending) return;
+
     // Save state first because popup will close
-    await saveDraftState();
+    await flushDraftSave();
 
     // Open file picker in a popup window to avoid main popup closing
     const filePickerUrl = chrome.runtime.getURL(`filepicker.html?theme=${config.theme}`);
@@ -391,52 +557,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) {
-      readAndStoreFile(file);
-    }
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    readAndStoreFiles(files);
   }
 
-  async function readAndStoreFile(file) {
+  async function readAndStoreFiles(files) {
+    if (files.length === 0 || isSending) return;
+
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64Data = e.target.result;
-
-        await new Promise((resolve, reject) => {
-          chrome.storage.local.set({
-            storedFile: {
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              data: base64Data
-            }
-          }, () => {
-            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-            else resolve();
-          });
-        });
-
-        elements.fileName.textContent = file.name;
-        elements.fileSize.textContent = formatFileSize(file.size);
-        elements.filePreview.classList.add('visible');
-        elements.fileBtn.style.display = 'none';
-      };
-      reader.readAsDataURL(file);
+      // Read the whole selection before writing so a read error does not append a partial batch.
+      const fileRecords = await Promise.all(files.map(readFileAsDataUrl));
+      await appendStoredFiles(fileRecords);
     } catch (error) {
-      console.error('Error storing file:', error);
-      showStatus('Failed to attach file', 'error');
+      console.error('Error storing files:', error);
+      showStatus(`Failed to attach files: ${error.message}`, 'error');
     }
   }
 
-  async function removeFile() {
-    await new Promise((resolve) => {
-      chrome.storage.local.remove(['storedFile'], resolve);
-    });
+  async function handleAttachmentRemove(e) {
+    const removeButton = e.target.closest('.file-remove');
+    if (!removeButton || isSending) return;
 
+    const index = parseInt(removeButton.dataset.index, 10);
+    if (Number.isNaN(index) || index < 0 || index >= attachments.length) return;
+
+    try {
+      const updatedFiles = attachments.filter((_, fileIndex) => fileIndex !== index);
+      await persistStoredFiles(updatedFiles);
+      attachments = updatedFiles;
+      renderAttachments();
+    } catch (error) {
+      console.error('Error removing file:', error);
+      showStatus(`Failed to remove file: ${error.message}`, 'error');
+    }
+  }
+
+  async function clearStoredFiles() {
+    await persistStoredFiles([]);
+    attachments = [];
     elements.fileInput.value = '';
-    elements.filePreview.classList.remove('visible');
-    elements.fileBtn.style.display = '';
+    renderAttachments();
   }
 
   function formatFileSize(bytes) {
@@ -447,7 +608,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function saveDraftState() {
     const draft = {
-      title: elements.titleInput.value,
+      // An automatically filled tab URL isn't part of the draft: the next popup fills in its own tab's
+      title: elements.titleInput.value === autoTitle ? '' : elements.titleInput.value,
       message: elements.messageInput.value,
       topic: elements.topicSelect.value,
       tags: tags, // Save tags array
@@ -456,13 +618,36 @@ document.addEventListener('DOMContentLoaded', () => {
     await new Promise(resolve => chrome.storage.local.set({ draftState: draft }, resolve));
   }
 
+  function scheduleDraftSave() {
+    if (draftSaveTimer !== null) {
+      clearTimeout(draftSaveTimer);
+    }
+
+    draftSaveTimer = setTimeout(() => {
+      draftSaveTimer = null;
+      saveDraftState().catch(error => console.error('Error saving draft:', error));
+    }, 250);
+  }
+
+  function cancelScheduledDraftSave() {
+    if (draftSaveTimer !== null) {
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = null;
+    }
+  }
+
+  async function flushDraftSave() {
+    cancelScheduledDraftSave();
+    await saveDraftState();
+  }
+
   async function restoreDraftState() {
     return new Promise(resolve => {
       chrome.storage.local.get(['draftState'], (result) => {
         if (result.draftState) {
           const draft = result.draftState;
-          if (draft.title) elements.titleInput.value = draft.title;
-          if (draft.message) elements.messageInput.value = draft.message;
+          if (typeof draft.title === 'string') elements.titleInput.value = draft.title;
+          if (typeof draft.message === 'string') elements.messageInput.value = draft.message;
           if (draft.tags) {
             tags = Array.isArray(draft.tags) ? draft.tags : draft.tags.split(',').filter(Boolean);
             renderTags();
@@ -477,8 +662,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateCustomDropdownSelection(draft.topic);
           }
 
-          // Clear draft state after restoration to prevent stale state from overwriting future sessions
-          chrome.storage.local.remove(['draftState']);
+          // Keep the draft until a message is sent successfully.
         }
         resolve();
       });
@@ -629,6 +813,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.serverAccessBtn.addEventListener('click', requestServerAccess);
 
+    // Keep the composer text available if the popup closes before sending.
+    elements.titleInput.addEventListener('input', scheduleDraftSave);
+    elements.messageInput.addEventListener('input', scheduleDraftSave);
+
 
     // Topics handling (badges)
     elements.newTopicInput.addEventListener('keydown', handleTopicKeydown);
@@ -653,10 +841,13 @@ document.addEventListener('DOMContentLoaded', () => {
       saveToStorage({ sendAnotherEnabled: config.sendAnotherEnabled });
     });
 
+    // Send multiple attachments either individually or as one ZIP.
+    elements.zipCheckbox.addEventListener('change', handleZipToggleChange);
+
     // File handling
     elements.fileBtn.addEventListener('click', handleFileButtonClick);
     elements.fileInput.addEventListener('change', handleFileSelect);
-    elements.fileRemove.addEventListener('click', removeFile);
+    elements.filePreview.addEventListener('click', handleAttachmentRemove);
 
     // Priority chips
     elements.priorityChips.addEventListener('click', handlePriorityClick);
@@ -694,8 +885,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for storage changes for live UI updates and external picker
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local') {
-        if (changes.storedFile) {
-          loadStoredFile();
+        if (changes[STORED_FILES_KEY] || changes[LEGACY_STORED_FILE_KEY]) {
+          loadStoredFiles();
         }
         if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
           console.log('Local notifications history changed, re-rendering...');
@@ -917,8 +1108,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function toggleAdvancedOptions() {
-    elements.advancedToggle.classList.toggle('open');
-    elements.advancedOptions.classList.toggle('visible');
+    const isOpen = elements.advancedOptions.classList.toggle('visible');
+    elements.advancedToggle.classList.toggle('open', isOpen);
+    elements.mainContent.classList.toggle('advanced-open', isOpen);
   }
 
   // ==================
@@ -1179,7 +1371,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // Send Notification
   // ==================
 
+  function decodeDataUrl(dataUrl) {
+    const base64 = (dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl).replace(/\s/g, '');
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    return bytes.buffer;
+  }
+
+  function showAttachmentSendSummary(sentCount, totalCount, failures) {
+    const failureDetails = failures
+      .map(({ file, error }) => `${file.name}: ${error.message}`)
+      .join('; ');
+    const sentText = `${sentCount} of ${totalCount} attachment${totalCount === 1 ? '' : 's'} sent.`;
+    showStatus(`${sentText} Failed: ${failureDetails}`, 'error');
+  }
+
+  function getZipFilename(date = new Date()) {
+    const pad = value => String(value).padStart(2, '0');
+    const datePart = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+    const timePart = `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+    return `ntfy-files-${datePart}-${timePart}.zip`;
+  }
+
   async function sendNotification() {
+    if (isSending) return;
+
     const topic = elements.topicSelect.value;
     const rawMessage = elements.messageInput.value.trim();
     const title = elements.titleInput.value.trim();
@@ -1188,11 +1409,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const message = rawMessage;
     const tagsString = tags.join(','); // Use tags array
 
-    const storedFile = await new Promise((resolve) => {
-      chrome.storage.local.get(['storedFile'], items => {
-        resolve(items.storedFile || null);
-      });
-    });
+    // Capture the latest values before validating or sending so a failed send can be retried.
+    await flushDraftSave();
+
+    let filesToSend;
+    try {
+      filesToSend = await readStoredFiles();
+      attachments = filesToSend;
+      renderAttachments();
+    } catch (error) {
+      showStatus(`Failed to load attachments: ${error.message}`, 'error');
+      return;
+    }
 
     if (!config.apiUrl) {
       showStatus('Configure ntfy URL in settings', 'warning');
@@ -1204,7 +1432,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    isSending = true;
     elements.sendBtn.disabled = true;
+    renderAttachments();
 
     try {
       const apiConfig = {
@@ -1212,57 +1442,106 @@ document.addEventListener('DOMContentLoaded', () => {
         accessToken: config.accessToken
       };
 
-      let response;
+      if (filesToSend.length > 0) {
+        const sendAsZip = filesToSend.length > 1 && elements.zipCheckbox.checked;
 
-      if (storedFile) {
-        // Send file as attachment using NtfyAPI
-        const base64 = storedFile.data.split(',')[1];
-        const binaryString = atob(base64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+        if (sendAsZip) {
+          const zipData = await ZipUtils.createZip(filesToSend.map(file => ({
+            name: file.name,
+            data: decodeDataUrl(file.data)
+          })));
+
+          await NtfyAPI.sendAttachment(apiConfig, topic, {
+            data: zipData,
+            filename: getZipFilename(),
+            contentType: 'application/zip',
+            message: message,
+            title: title,
+            priority: selectedPriority,
+            tags: tagsString
+          });
+
+          await finishSuccessfulSend(filesToSend.length, 'ZIP sent!');
+          return;
         }
 
-        response = await NtfyAPI.sendAttachment(apiConfig, topic, {
-          data: bytes.buffer,
-          filename: storedFile.name,
-          message: message,
-          title: title,
-          priority: selectedPriority,
-          tags: tagsString
-        });
+        const failures = [];
+        let sentCount = 0;
+        let remainingFiles = [...filesToSend];
+
+        // Send sequentially so the backend still receives one attachment per message.
+        for (const file of filesToSend) {
+          try {
+            await NtfyAPI.sendAttachment(apiConfig, topic, {
+              data: decodeDataUrl(file.data),
+              filename: file.name,
+              message: message,
+              title: title,
+              priority: selectedPriority,
+              tags: tagsString
+            });
+          } catch (error) {
+            failures.push({ file, error });
+            continue;
+          }
+
+          sentCount++;
+          remainingFiles = remainingFiles.filter(remainingFile => remainingFile !== file);
+          await persistStoredFiles(remainingFiles);
+          attachments = remainingFiles;
+          renderAttachments();
+        }
+
+        if (failures.length > 0) {
+          // Failed files remain in storage and the form remains unchanged for retry.
+          showAttachmentSendSummary(sentCount, filesToSend.length, failures);
+          return;
+        }
+
+        await finishSuccessfulSend(filesToSend.length);
       } else {
         // Send text notification using NtfyAPI
-        response = await NtfyAPI.sendNotification(apiConfig, topic, {
+        await NtfyAPI.sendNotification(apiConfig, topic, {
           message: message,
           title: title,
           priority: selectedPriority,
           tags: tagsString
         });
-      }
 
-      elements.messageInput.value = '';
-      elements.titleInput.value = '';
-      autoTitle = '';
-      applyUrlTitle();
-
-      await removeFile();
-      // Clear any saved draft state so it doesn't overwrite preferences next time
-      await new Promise(resolve => chrome.storage.local.remove(['draftState'], resolve));
-
-      updatePriorityUI();
-
-      // Close the popup unless "Send another" is checked (the tab stays open)
-      if (!elements.sendAnotherCheckbox.checked && !isPageMode) {
-        setTimeout(() => window.close(), 100);
-      } else {
-        // Only show success message if staying open
-        showStatus('Notification sent!', 'success');
+        await finishSuccessfulSend(0);
       }
     } catch (error) {
       showStatus(`Error: ${error.message}`, 'error');
     } finally {
+      isSending = false;
       elements.sendBtn.disabled = false;
+      renderAttachments();
+    }
+  }
+
+  async function finishSuccessfulSend(attachmentCount, successMessage) {
+    cancelScheduledDraftSave();
+    elements.messageInput.value = '';
+    elements.titleInput.value = '';
+    autoTitle = '';
+    applyUrlTitle();
+
+    if (attachmentCount > 0) {
+      await clearStoredFiles();
+    }
+
+    // Clear any saved draft state so it doesn't overwrite preferences next time.
+    await removeLocalStorage(['draftState']);
+    updatePriorityUI();
+
+    // Close the popup unless "Send another" is checked (the extension's tab stays open).
+    if (!elements.sendAnotherCheckbox.checked && !isPageMode) {
+      setTimeout(() => window.close(), 100);
+    } else {
+      const notificationText = successMessage || (attachmentCount > 1
+        ? `${attachmentCount} notifications sent!`
+        : 'Notification sent!');
+      showStatus(notificationText, 'success');
     }
   }
   function setupTooltips() {
