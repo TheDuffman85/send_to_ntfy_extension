@@ -101,7 +101,7 @@ body {
 .header {
     background: linear-gradient(to right, #317f6e 0, #57a49a 600px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-    padding: 12px 16px;
+    padding: 4px 16px; /* 40 px with the 32 px buttons, like the Send/Receive row */
     display: flex;
     align-items: center;
 }
