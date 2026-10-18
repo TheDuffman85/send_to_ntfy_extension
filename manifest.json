@@ -1,14 +1,20 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "116",
   "name": "Send to ntfy",
   "version": "2.3.4",
-  "description": "Send notifications to ntfy.sh with file attachments, priority, and tags",
+  "description": "Send and receive ntfy notifications: file attachments, priority, tags, and a list of received messages",
   "permissions": [
     "activeTab",
     "storage",
     "unlimitedStorage",
     "contextMenus",
-    "scripting"
+    "scripting",
+    "notifications",
+    "alarms"
+  ],
+  "optional_permissions": [
+    "tabs"
   ],
   "optional_host_permissions": [
     "<all_urls>"

@@ -9,11 +9,12 @@ const NtfyAPI = {
     async getConfig() {
         const accessToken = await this.getAccessToken();
         return new Promise((resolve) => {
-            chrome.storage.sync.get(['apiUrl', 'topics'], (items) => {
+            chrome.storage.sync.get(['apiUrl', 'topics', 'includeUrl'], (items) => {
                 resolve({
                     apiUrl: items.apiUrl || '',
                     accessToken: accessToken,
-                    topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : []
+                    topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
+                    includeUrl: items.includeUrl === true
                 });
             });
         });
@@ -55,24 +56,69 @@ const NtfyAPI = {
      */
     buildAuthHeaders(accessToken, apiUrl) {
         const headers = new Headers();
+        const auth = this.buildAuthHeaderValue(accessToken, apiUrl);
+        if (auth) {
+            headers.set('Authorization', auth);
+        }
+        return headers;
+    },
+
+    /**
+     * Build the Authorization header value: Bearer token, or Basic from credentials embedded in the URL
+     * @param {string} accessToken - Bearer token for authentication
+     * @param {string} apiUrl - Server URL, may contain user:password@
+     * @returns {string} - Header value, or '' when there is no authentication
+     */
+    buildAuthHeaderValue(accessToken, apiUrl) {
         if (accessToken) {
-            headers.set('Authorization', `Bearer ${accessToken}`);
-        } else if (apiUrl) {
+            return `Bearer ${accessToken}`;
+        }
+        if (apiUrl) {
             try {
                 const url = new URL(apiUrl);
                 if (url.username || url.password) {
                     const username = decodeURIComponent(url.username);
                     const password = decodeURIComponent(url.password);
-                    const credentials = `${username}:${password}`;
-                    // Use robust base64 encoding that supports UTF-8
-                    const auth = btoa(unescape(encodeURIComponent(credentials)));
-                    headers.set('Authorization', `Basic ${auth}`);
+                    return `Basic ${this.base64Encode(`${username}:${password}`)}`;
                 }
             } catch (e) {
-                // Invoke error handling or logging if necessary, but silent failure relies on no auth
+                // Invalid URL: no authentication
             }
         }
-        return headers;
+        return '';
+    },
+
+    /**
+     * Whether a URL from a received message is safe to open or copy: http(s) only
+     * @param {string} url
+     * @returns {boolean}
+     */
+    isHttpUrl(url) {
+        try {
+            const protocol = new URL(url).protocol;
+            return protocol === 'https:' || protocol === 'http:';
+        } catch (e) {
+            return false;
+        }
+    },
+
+    /**
+     * Base64-encode a UTF-8 string
+     * @param {string} value
+     * @returns {string}
+     */
+    base64Encode(value) {
+        return btoa(unescape(encodeURIComponent(value)));
+    },
+
+    /**
+     * Encode a string as ntfy's ?auth= query parameter expects it: base64url without padding
+     * (Go's base64.RawURLEncoding) of the whole Authorization header value
+     * @param {string} value
+     * @returns {string}
+     */
+    base64UrlEncode(value) {
+        return this.base64Encode(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     },
 
     /**
@@ -206,9 +252,11 @@ const NtfyAPI = {
      * @param {Object} config - Configuration object
      * @param {string} topic - Topic to send to
      * @param {string} imageUrl - URL of the image to fetch and send
+     * @param {string} [message] - Optional message
+     * @param {string} [title] - Optional title
      * @returns {Promise<Response>}
      */
-    async sendImageFromUrl(config, topic, imageUrl) {
+    async sendImageFromUrl(config, topic, imageUrl, message, title) {
         // Fetch the image
         const imageResponse = await fetch(imageUrl);
         if (!imageResponse.ok) {
@@ -235,6 +283,76 @@ const NtfyAPI = {
             filename = 'image.png';
         }
 
-        return this.sendAttachment(config, topic, { data: imageBuffer, filename });
+        return this.sendAttachment(config, topic, { data: imageBuffer, filename, message, title });
+    },
+
+    /**
+     * Check whether the configured credentials can read a topic (ntfy's GET /<topic>/auth)
+     * @param {Object} config - Configuration object with apiUrl and accessToken
+     * @param {string} topic
+     * @returns {Promise<boolean|null>} - true or false, or null if the server couldn't be asked
+     */
+    async canReadTopic(config, topic) {
+        try {
+            const response = await fetch(`${this.buildTopicUrl(config.apiUrl, topic)}/auth`, {
+                method: 'GET',
+                headers: this.buildAuthHeaders(config.accessToken, config.apiUrl)
+            });
+            if (response.ok) {
+                return true;
+            }
+            if (response.status === 401 || response.status === 403) {
+                return false;
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /**
+     * Fetch cached notifications for a topic
+     * @param {Object} config - Configuration object with apiUrl and accessToken
+     * @param {string} topic - Topic to fetch from
+     * @param {string} [since] - Optional since parameter (default 'all')
+     * @returns {Promise<Array>} - Array of notification objects
+     */
+    async getNotifications(config, topic, since = 'all') {
+        const baseUrl = config.apiUrl;
+        if (!baseUrl) {
+            throw new Error('API URL is not configured');
+        }
+
+        const fullUrl = `${this.buildTopicUrl(baseUrl, topic)}/json?poll=1&since=${since}`;
+        const headers = this.buildAuthHeaders(config.accessToken, baseUrl);
+
+        const response = await fetch(fullUrl, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const text = await response.text();
+        if (!text.trim()) {
+            return [];
+        }
+
+        // Parse NDJSON
+        return text.split('\n')
+            .filter(line => line.trim())
+            .map(line => {
+                try {
+                    return JSON.parse(line);
+                } catch (e) {
+                    console.error('Failed to parse notification line:', e, line);
+                    return null;
+                }
+            })
+            .filter(Boolean)
+            // Filter out non-message events
+            .filter(msg => msg.event === 'message');
     }
 };

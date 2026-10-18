@@ -11,6 +11,23 @@
       width: 350px;
     }
 
+    /* Wider on the Receive tab, for the topic list */
+    body.receive-active {
+      width: 600px;
+    }
+
+    body.receive-active:not(.page-mode) .notifications-list {
+      max-height: 400px;
+    }
+
+    /* Opened in a browser tab: follow the tab's width, up to a readable maximum */
+    body.page-mode,
+    body.page-mode.receive-active {
+      width: auto;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
     .header {
       justify-content: space-between;
     }
@@ -27,13 +44,19 @@
     <div class="header-left">
       <div class="header-title">
         <img src="icons/icon48.png" alt="ntfy" style="width: 20px; height: 20px;">
-        <span id="header-text">Send to ntfy</span>
+        <span id="header-text">Ntfy</span>
       </div>
     </div>
     <div class="header-actions">
       <button class="back-btn" id="back-btn" title="Back">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
           <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+        </svg>
+      </button>
+      <button class="icon-btn" id="popout-btn" title="Open in a tab">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+          <path
+            d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h10v4h8v10z" />
         </svg>
       </button>
       <button class="icon-btn" id="open-url-btn" title="Open in ntfy">
@@ -52,98 +75,133 @@
   </div>
 
   <!-- Main View -->
+  <!-- Main View -->
   <div class="view active" id="main-view">
-    <div class="main-content" id="main-content">
-      <!-- Topic Selection -->
-      <div class="form-group">
-        <label class="form-label">Topic</label>
-        <div class="custom-dropdown" id="topic-dropdown">
-          <div class="custom-dropdown-selected" id="topic-dropdown-selected">
-            <span id="topic-dropdown-text">Select topic...</span>
-          </div>
-          <div class="custom-dropdown-arrow">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
-              <path d="M2 4l4 4 4-4" />
-            </svg>
-          </div>
-          <div class="custom-dropdown-options" id="topic-dropdown-options"></div>
-        </div>
-        <select class="form-select" id="topic-select"></select>
-      </div>
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="send">Send</button>
+      <button class="tab-btn" data-tab="receive">Receive</button>
+    </div>
 
-      <!-- Title (Optional) -->
-      <div class="form-group">
-        <label class="form-label" for="title-input">Title</label>
-        <input type="text" class="form-input" id="title-input">
-      </div>
-
-      <!-- Message -->
-      <div class="form-group">
-        <label class="form-label" for="message-input">Message</label>
-      </div>
-      <textarea class="form-textarea" id="message-input" rows="3"></textarea>
-
-
-      <!-- File Attachment -->
-      <div class="file-section">
-        <div class="file-input-wrapper">
-          <input type="file" class="file-input" id="file-input" multiple>
-          <button class="file-btn" id="file-btn">
-            📎 Attach files
-          </button>
-        </div>
-        <div class="file-preview" id="file-preview" aria-live="polite"></div>
-        <label class="zip-toggle" id="zip-toggle">
-          <span class="zip-toggle-copy">
-            <span class="zip-toggle-title">Send files as one ZIP</span>
-            <span class="zip-toggle-hint">One ntfy message containing every attached file.</span>
-          </span>
-          <input type="checkbox" id="zip-checkbox" aria-label="Send files as one ZIP">
-          <span class="zip-switch" aria-hidden="true"><span></span></span>
-        </label>
-      </div>
-
-      <!-- Advanced Options Toggle -->
-      <div class="advanced-toggle" id="advanced-toggle">
-        <span class="arrow">▶</span>
-        Advanced options
-      </div>
-
-      <!-- Advanced Options -->
-      <div class="advanced-options" id="advanced-options">
-        <!-- Priority -->
+    <!-- Tab Contents -->
+    <!-- Send Tab -->
+    <div class="tab-content active" id="tab-content-send">
+      <div class="main-content" id="main-content">
+        <!-- Topic Selection -->
         <div class="form-group">
-          <label class="form-label">Priority</label>
-          <div class="chips" id="priority-chips">
-            <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
-            <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
-            <button class="chip active" data-priority="3">Default</button>
-            <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
-            <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
+          <label class="form-label">Topic</label>
+          <div class="custom-dropdown" id="topic-dropdown">
+            <div class="custom-dropdown-selected" id="topic-dropdown-selected">
+              <span id="topic-dropdown-text">Select topic...</span>
+            </div>
+            <div class="custom-dropdown-arrow">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
+                <path d="M2 4l4 4 4-4" />
+              </svg>
+            </div>
+            <div class="custom-dropdown-options" id="topic-dropdown-options"></div>
           </div>
+          <select class="form-select" id="topic-select"></select>
         </div>
 
-        <!-- Tags -->
+        <!-- Title (Optional) -->
         <div class="form-group">
-          <label class="form-label">Tags</label>
-          <div class="tags-container" id="tags-container">
-            <input type="text" class="tag-input-field" id="new-tag-input">
-            <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
+          <div class="form-label-row">
+            <label class="form-label" for="title-input">Title</label>
+            <button class="link-btn" id="tab-url-btn" style="display: none;"
+              title="Use the URL of the web page tab you were on last">🔗 Use tab URL</button>
+          </div>
+          <input type="text" class="form-input" id="title-input">
+        </div>
+
+        <!-- Message -->
+        <div class="form-group">
+          <label class="form-label" for="message-input">Message</label>
+        </div>
+        <textarea class="form-textarea" id="message-input" rows="3"></textarea>
+
+        <!-- File Attachment -->
+        <div class="file-section">
+          <div class="file-input-wrapper">
+            <input type="file" class="file-input" id="file-input" multiple>
+            <button class="file-btn" id="file-btn">
+              📎 Attach files
+            </button>
+          </div>
+          <div class="file-preview" id="file-preview" aria-live="polite"></div>
+          <label class="zip-toggle" id="zip-toggle">
+            <span class="zip-toggle-copy">
+              <span class="zip-toggle-title">Send files as one ZIP</span>
+              <span class="zip-toggle-hint">One ntfy message containing every attached file.</span>
+            </span>
+            <input type="checkbox" id="zip-checkbox" aria-label="Send files as one ZIP">
+            <span class="zip-switch" aria-hidden="true"><span></span></span>
+          </label>
+        </div>
+
+        <!-- Advanced Options Toggle -->
+        <div class="advanced-toggle" id="advanced-toggle">
+          <span class="arrow">▶</span>
+          Advanced options
+        </div>
+
+        <!-- Advanced Options -->
+        <div class="advanced-options" id="advanced-options">
+          <!-- Priority -->
+          <div class="form-group">
+            <label class="form-label">Priority</label>
+            <div class="chips" id="priority-chips">
+              <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
+              <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
+              <button class="chip active" data-priority="3">Default</button>
+              <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
+              <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
+            </div>
+          </div>
+
+          <!-- Tags -->
+          <div class="form-group">
+            <label class="form-label">Tags</label>
+            <div class="tags-container" id="tags-container">
+              <input type="text" class="tag-input-field" id="new-tag-input">
+              <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Send Footer -->
+        <div class="send-footer">
+          <div class="send-another-group">
+            <input type="checkbox" id="send-another-checkbox">
+            <label for="send-another-checkbox">Send another</label>
+          </div>
+          <button class="send-btn" id="send-btn">Send</button>
+        </div>
+
+        <!-- Status Message -->
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+
+    <!-- Receive Tab -->
+    <div class="tab-content" id="tab-content-receive">
+      <div class="main-content receive-layout">
+        <!-- Topic list: All topics, then each configured topic -->
+        <nav class="topic-sidebar" id="topic-sidebar" aria-label="Topics"></nav>
+        <!-- Notifications Section -->
+        <div class="notifications-section" id="notifications-section">
+          <div class="section-header">
+            <span class="section-title">Notifications</span>
+            <div class="notifications-control-bar" id="notifications-control-bar" style="visibility: hidden;">
+              <button class="control-btn" id="mark-all-read-btn" title="Mark all read">✓ Mark all read</button>
+              <button class="control-btn" id="delete-all-btn" title="Delete all">🗑 Delete all</button>
+            </div>
+          </div>
+          <div class="notifications-list" id="notifications-list">
+            <div class="notifications-loading">Loading notifications...</div>
           </div>
         </div>
       </div>
-
-      <!-- Send Footer -->
-      <div class="send-footer">
-        <div class="send-another-group">
-          <input type="checkbox" id="send-another-checkbox">
-          <label for="send-another-checkbox">Send another</label>
-        </div>
-        <button class="send-btn" id="send-btn">Send</button>
-      </div>
-
-      <!-- Status Message -->
-      <div class="status" id="status"></div>
     </div>
   </div>
 
@@ -163,7 +221,7 @@
         <input type="password" class="form-input" id="token-input" placeholder="tk_...">
         <p class="form-hint">For private topics or authenticated servers</p>
         <button class="chip" id="server-access-btn" style="display: none;">🔓 Allow access to this server</button>
-        <p class="form-hint" id="server-access-hint" style="display: none;">Needed to send with authentication</p>
+        <p class="form-hint" id="server-access-hint" style="display: none;">Needed to send and receive with authentication</p>
       </div>
 
       <div class="form-group">
@@ -172,6 +230,14 @@
           <input type="text" class="topic-input-field" id="new-topic-input">
           <span class="topic-input-hint" id="topic-input-hint">Press enter to add topic</span>
         </div>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="include-url-checkbox">
+          <label for="include-url-checkbox">Include current tab's URL</label>
+        </div>
+        <p class="form-hint">Put the active tab's URL in the title</p>
       </div>
 
       <div class="form-group">

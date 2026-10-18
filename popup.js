@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const elements = {
     // Views
     mainView: document.getElementById('main-view'),
+    mainContent: document.getElementById('main-content'), // Send tab form
     settingsView: document.getElementById('settings-view'),
 
     // Header
@@ -10,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     headerText: document.getElementById('header-text'),
     openUrlBtn: document.getElementById('open-url-btn'),
     settingsBtn: document.getElementById('settings-btn'),
+    popoutBtn: document.getElementById('popout-btn'),
 
     // Main form
     topicSelect: document.getElementById('topic-select'),
@@ -18,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     topicDropdownText: document.getElementById('topic-dropdown-text'),
     topicDropdownOptions: document.getElementById('topic-dropdown-options'),
     titleInput: document.getElementById('title-input'),
+    tabUrlBtn: document.getElementById('tab-url-btn'),
     messageInput: document.getElementById('message-input'),
     tagsContainer: document.getElementById('tags-container'),
     newTagInput: document.getElementById('new-tag-input'),
@@ -47,17 +50,28 @@ document.addEventListener('DOMContentLoaded', () => {
     status: document.getElementById('status'),
     settingsStatus: document.getElementById('settings-status'),
 
-    // Content sections
-    mainContent: document.getElementById('main-content'),
-
     // Settings inputs
     urlInput: document.getElementById('url-input'),
     tokenInput: document.getElementById('token-input'),
     serverAccessBtn: document.getElementById('server-access-btn'),
     serverAccessHint: document.getElementById('server-access-hint'),
+    includeUrlCheckbox: document.getElementById('include-url-checkbox'),
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
     topicInputHint: document.getElementById('topic-input-hint'),
+
+    // Recent Notifications
+    notificationsList: document.getElementById('notifications-list'),
+    topicSidebar: document.getElementById('topic-sidebar'),
+
+    // Tabs
+    tabButtons: document.querySelectorAll('.tab-btn'),
+    tabContents: document.querySelectorAll('.tab-content'),
+
+    // Bulk Actions Control Bar
+    notificationsControlBar: document.getElementById('notifications-control-bar'),
+    markAllReadBtn: document.getElementById('mark-all-read-btn'),
+    deleteAllBtn: document.getElementById('delete-all-btn'),
   };
 
   // State
@@ -72,6 +86,15 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   let tags = []; // State for tags
+  let readMessageIds = []; // State for read notifications
+  let deletedMessageIds = []; // State for deleted notifications (client-side only)
+  let activeTab = 'send'; // Active tab state
+  let receiveFilter = 'all'; // Topic shown on the Receive tab, or 'all'
+  // Opened with the header button in a browser tab instead of the toolbar popup
+  const pageParams = new URLSearchParams(location.search);
+  const isPageMode = pageParams.get('mode') === 'page';
+  let autoTitle = ''; // The tab URL last put in the Title field automatically
+  let currentNotifications = []; // Currently displayed notifications for the active topic
   let attachments = [];
 
   // Drag and drop state
@@ -87,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SEND_AS_ZIP_SETTING_KEY = 'sendAsZipEnabled';
   // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', SEND_AS_ZIP_SETTING_KEY];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl', SEND_AS_ZIP_SETTING_KEY];
   const STORED_FILES_KEY = 'storedFiles';
   const LEGACY_STORED_FILE_KEY = 'storedFile';
 
@@ -96,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function init() {
     await loadConfig();
+    await loadLocalState();
     await checkSessionAndCleanup(); // Check session and cleanup old files if needed
     await restoreDraftState();
     await loadStoredFiles();
@@ -107,8 +131,32 @@ document.addEventListener('DOMContentLoaded', () => {
     applyTheme();
     // Render initial empty tags or restored ones
     renderTags();
-    // Set focus on message input when popup opens
-    elements.messageInput.focus();
+    // Set header title dynamically from manifest
+    const manifest = chrome.runtime.getManifest();
+    elements.headerText.textContent = manifest.name;
+
+    if (isPageMode) {
+      document.body.classList.add('page-mode');
+      elements.popoutBtn.style.display = 'none';
+      elements.tabUrlBtn.style.display = '';
+      // Coming back to this tab: the user may have moved on to another page
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible') {
+          config.pageUrl = await getPageUrl();
+          applyUrlTitle();
+        }
+      });
+    }
+    applyUrlTitle();
+    if (pageParams.get('tab') === 'receive') {
+      switchTab('receive');
+    } else {
+      // Set focus on message input when popup opens
+      elements.messageInput.focus();
+    }
+
+    // Trigger initial sync in background
+    chrome.runtime.sendMessage({ action: 'sync' });
   }
 
   // ==================
@@ -128,11 +176,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         theme: items.theme || 'auto',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
+        includeUrl: items.includeUrl === true,
         sendAsZipEnabled: items[SEND_AS_ZIP_SETTING_KEY] === true
       };
 
       // Restore 'Send another' checkbox state
       elements.sendAnotherCheckbox.checked = config.sendAnotherEnabled;
+      elements.includeUrlCheckbox.checked = config.includeUrl;
       elements.zipCheckbox.checked = config.sendAsZipEnabled;
 
       if (items.priority) {
@@ -144,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (items.lastTags) {
-        // Only set tags if they weren't already set by draft restore? 
+        // Only set tags if they weren't already set by draft restore?
         // Actually loadConfig runs before restoreDraftState, so draft state will overwrite if exists. Correct.
         tags = Array.isArray(items.lastTags) ? items.lastTags : [];
       }
@@ -160,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
       theme: config.theme,
+      includeUrl: elements.includeUrlCheckbox.checked,
       sendAsZipEnabled: config.sendAsZipEnabled
     };
 
@@ -221,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function updateServerAccessUI(apiUrl, accessToken) {
     const pattern = serverOriginPattern(apiUrl);
     let missing = false;
-    if (pattern && NtfyAPI.buildAuthHeaders(accessToken, apiUrl).has('Authorization')) {
+    if (pattern && NtfyAPI.buildAuthHeaderValue(accessToken, apiUrl)) {
       try {
         missing = !(await chrome.permissions.contains({ origins: [pattern] }));
       } catch (e) {
@@ -557,7 +608,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function saveDraftState() {
     const draft = {
-      title: elements.titleInput.value,
+      // An automatically filled tab URL isn't part of the draft: the next popup fills in its own tab's
+      title: elements.titleInput.value === autoTitle ? '' : elements.titleInput.value,
       message: elements.messageInput.value,
       topic: elements.topicSelect.value,
       tags: tags, // Save tags array
@@ -645,7 +697,83 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function getFromStorageLocal(keys) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get(keys, items => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(items);
+        }
+      });
+    });
+  }
+
+  function saveToStorageLocal(data) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  // Reading another tab's URL needs the optional "tabs" permission (asked for by the "Use tab URL" button)
+  async function getLastBrowsingTabUrl() {
+    try {
+      if (!(await chrome.permissions.contains({ permissions: ['tabs'] }))) {
+        return '';
+      }
+      const own = await chrome.tabs.getCurrent();
+      const tabs = await chrome.tabs.query({ windowType: 'normal' });
+      const pages = tabs.filter(tab => tab.id !== own?.id && NtfyAPI.isHttpUrl(tab.url));
+      pages.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+      return pages[0]?.url || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // "Include current tab's URL" puts the URL in the Title field, where it can still be edited.
+  // A title the user typed is left alone.
+  function applyUrlTitle() {
+    const current = elements.titleInput.value.trim();
+    if (current && current !== autoTitle) {
+      return;
+    }
+
+    const url = config.includeUrl && NtfyAPI.isHttpUrl(config.pageUrl) ? config.pageUrl.replace(/\/$/, '') : '';
+    elements.titleInput.value = url;
+    autoTitle = url;
+  }
+
+  function useTabUrl() {
+    // Called directly from the click: permissions.request needs a user gesture
+    chrome.permissions.request({ permissions: ['tabs'] }, async (granted) => {
+      if (!granted) {
+        showStatus('Allow reading tabs to use the tab URL', 'warning');
+        return;
+      }
+      const url = await getLastBrowsingTabUrl();
+      if (!url) {
+        showStatus('No web page tab found', 'warning');
+        return;
+      }
+      config.pageUrl = url;
+      elements.titleInput.value = url.replace(/\/$/, '');
+      autoTitle = elements.titleInput.value;
+    });
+  }
+
   async function getPageUrl() {
+    if (isPageMode) {
+      // The active tab is this page itself: use the web page tab the user was on last
+      return getLastBrowsingTabUrl();
+    }
+
     return new Promise((resolve, reject) => {
       chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
         if (chrome.runtime.lastError) {
@@ -677,6 +805,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.tokenInput.addEventListener('input', () => {
       // showSettingsStatus('Saving...', 'visible');
       debouncedSave();
+    });
+
+    elements.includeUrlCheckbox.addEventListener('change', () => {
+      saveConfig();
     });
 
     elements.serverAccessBtn.addEventListener('click', requestServerAccess);
@@ -731,6 +863,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Custom topic dropdown
     elements.topicDropdownSelected.addEventListener('click', toggleTopicDropdown);
 
+    // Tab switching
+    elements.tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    elements.popoutBtn.addEventListener('click', openInTab);
+    elements.tabUrlBtn.addEventListener('click', useTabUrl);
+
+    // Bulk actions
+    elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
+    elements.deleteAllBtn.addEventListener('click', handleDeleteAll);
+
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
       if (!elements.topicDropdown.contains(e.target)) {
@@ -738,10 +882,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Listen for file selection from external picker
+    // Listen for storage changes for live UI updates and external picker
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && (changes[STORED_FILES_KEY] || changes[LEGACY_STORED_FILE_KEY])) {
-        loadStoredFiles();
+      if (area === 'local') {
+        if (changes[STORED_FILES_KEY] || changes[LEGACY_STORED_FILE_KEY]) {
+          loadStoredFiles();
+        }
+        if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
+          console.log('Local notifications history changed, re-rendering...');
+          loadLocalState().then(() => {
+            loadNotifications();
+          });
+        }
       }
     });
 
@@ -758,6 +910,48 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==================
   // View Switching
   // ==================
+
+  function switchTab(tab) {
+    if (tab === activeTab) return;
+
+    activeTab = tab;
+
+    // Update active button class
+    elements.tabButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+
+    // Update active content class
+    elements.tabContents.forEach(content => {
+      const isTarget = content.id === `tab-content-${tab}`;
+      content.classList.toggle('active', isTarget);
+    });
+
+    document.body.classList.toggle('receive-active', tab === 'receive');
+
+    // Load notifications on-demand when switching to receive tab
+    if (activeTab === 'receive') {
+      loadNotifications();
+      chrome.runtime.sendMessage({ action: 'sync' });
+    }
+  }
+
+  // Open this page in a browser tab, which unlike the toolbar popup can be any size.
+  // Switch to that tab instead if it is already open (runtime.getContexts: Chrome 116+).
+  async function openInTab() {
+    const pageUrl = chrome.runtime.getURL('popup.html?mode=page');
+    if (chrome.runtime.getContexts) {
+      const contexts = await chrome.runtime.getContexts({ contextTypes: ['TAB'] });
+      const open = contexts.find(context => context.documentUrl && context.documentUrl.startsWith(pageUrl));
+      if (open) {
+        await chrome.tabs.update(open.tabId, { active: true });
+        await chrome.windows.update(open.windowId, { focused: true });
+        window.close();
+        return;
+      }
+    }
+
+    await chrome.tabs.create({ url: `${pageUrl}&tab=${activeTab}` });
+    window.close();
+  }
 
   function showSettingsView() {
     // Populate settings fields with current config
@@ -783,11 +977,15 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.backBtn.classList.remove('visible');
     elements.settingsBtn.style.display = '';
     elements.openUrlBtn.style.display = '';
-    elements.headerText.textContent = 'Send to ntfy';
+
+    const manifest = chrome.runtime.getManifest();
+    elements.headerText.textContent = manifest.name;
+
     isSettingsView = false;
 
     // Refresh UI to reflect any changes made in settings
     updateUI();
+    applyUrlTitle();
   }
 
   // ==================
@@ -798,7 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isConfigured = config.apiUrl && config.topics.length > 0;
 
     // Toggle disabled state on form and highlight on settings button
-    elements.mainContent.classList.toggle('disabled', !isConfigured);
+    elements.mainView.classList.toggle('disabled', !isConfigured);
     elements.settingsBtn.classList.toggle('highlight', !isConfigured || serverAccessMissing);
 
     // Enable/disable the open URL button based on configuration
@@ -861,6 +1059,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save the selected topic
     config.lastTopic = topic;
     saveToStorage({ lastTopic: topic });
+
+    // Load notifications for the new topic if we are on the receive tab
+    if (activeTab === 'receive') {
+      loadNotifications();
+    }
   }
 
   function updateCustomDropdownSelection(selectedValue) {
@@ -961,7 +1164,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Adjust index if moving item from earlier position to later position
       // because removal shifts indices
-      // Note: Splice logic actually handles "insert at index" naturally, 
+      // Note: Splice logic actually handles "insert at index" naturally,
       // but interpretation of "drop on" varies.
       // Current implementation: Remove then Insert.
 
@@ -1199,8 +1402,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isSending) return;
 
     const topic = elements.topicSelect.value;
-    const message = elements.messageInput.value.trim();
+    const rawMessage = elements.messageInput.value.trim();
     const title = elements.titleInput.value.trim();
+
+    // With "Include current tab's URL", the URL is in the title (applyUrlTitle)
+    const message = rawMessage;
     const tagsString = tags.join(','); // Use tags array
 
     // Capture the latest values before validating or sending so a failed send can be retried.
@@ -1317,6 +1523,8 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelScheduledDraftSave();
     elements.messageInput.value = '';
     elements.titleInput.value = '';
+    autoTitle = '';
+    applyUrlTitle();
 
     if (attachmentCount > 0) {
       await clearStoredFiles();
@@ -1326,8 +1534,8 @@ document.addEventListener('DOMContentLoaded', () => {
     await removeLocalStorage(['draftState']);
     updatePriorityUI();
 
-    // Close the popup unless "Send another" is checked.
-    if (!elements.sendAnotherCheckbox.checked) {
+    // Close the popup unless "Send another" is checked (the extension's tab stays open).
+    if (!elements.sendAnotherCheckbox.checked && !isPageMode) {
       setTimeout(() => window.close(), 100);
     } else {
       const notificationText = successMessage || (attachmentCount > 1
@@ -1452,6 +1660,323 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleGlobalKeyup(e) {
     if (e.code === 'ControlRight') {
       rightCtrlDown = false;
+    }
+  }
+
+  // ==================
+  // Recent Notifications
+  // ==================
+
+  // Lists the received messages of all topics, like the unread badge counts them. (Filtering by the
+  // Send tab's topic hid everything when that topic was one the token can only send to.)
+  async function loadNotifications() {
+    if (!config.apiUrl || config.topics.length === 0) {
+      elements.notificationsList.innerHTML = '<div class="notifications-empty">Configure server and topics to view notifications</div>';
+      return;
+    }
+
+    try {
+      const localData = await getFromStorageLocal(['receivedNotifications']);
+      const allNotifications = (localData.receivedNotifications || [])
+        .filter(notification => !deletedMessageIds.includes(notification.id));
+
+      if (receiveFilter !== 'all' && !config.topics.includes(receiveFilter)) {
+        receiveFilter = 'all';
+      }
+      renderTopicSidebar(allNotifications);
+
+      const notifications = receiveFilter === 'all'
+        ? allNotifications
+        : allNotifications.filter(notification => notification.topic === receiveFilter);
+
+      // Save currently visible notifications for bulk actions
+      currentNotifications = notifications;
+
+      // Show control bar only if there are notifications to manage
+      elements.notificationsControlBar.style.visibility = notifications.length > 0 ? 'visible' : 'hidden'; // Keeps its space, so the heading doesn't move
+
+      elements.notificationsList.innerHTML = '';
+
+      if (notifications.length === 0) {
+        elements.notificationsList.innerHTML = '<div class="notifications-empty">No recent notifications</div>';
+        return;
+      }
+
+      // Sort notifications by time descending (newest first)
+      notifications.sort((a, b) => b.time - a.time);
+
+      notifications.forEach(notification => {
+        const item = document.createElement('div');
+        item.className = 'notification-item';
+        item.dataset.priority = notification.priority || 3;
+
+        const isRead = readMessageIds.includes(notification.id);
+        if (isRead) {
+          item.classList.add('read');
+        }
+
+        const header = document.createElement('div');
+        header.className = 'notification-header';
+
+        const title = document.createElement('span');
+        title.className = 'notification-title';
+        title.textContent = notification.title || 'Notification';
+        header.appendChild(title);
+
+        const time = document.createElement('span');
+        time.className = 'notification-time';
+        time.textContent = `${notification.topic} · ${formatTime(notification.time)}`;
+        header.appendChild(time);
+
+        item.appendChild(header);
+
+        const message = document.createElement('div');
+        message.className = 'notification-message';
+        message.textContent = notification.message || '';
+        item.appendChild(message);
+
+        // Footer for tags and actions
+        const footer = document.createElement('div');
+        footer.className = 'notification-footer';
+
+        if (notification.tags && notification.tags.length > 0) {
+          const tagsContainer = document.createElement('div');
+          tagsContainer.className = 'notification-tags';
+          notification.tags.forEach(tag => {
+            const tagSpan = document.createElement('span');
+            tagSpan.className = 'notification-tag';
+            tagSpan.textContent = tag;
+            tagsContainer.appendChild(tagSpan);
+          });
+          footer.appendChild(tagsContainer);
+        }
+
+        // Actions
+        const actions = document.createElement('div');
+        actions.className = 'notification-actions';
+
+        const readBtn = document.createElement('button');
+        readBtn.className = 'notification-action-btn read-btn';
+        readBtn.textContent = '✓';
+        readBtn.title = isRead ? 'Mark as Unread' : 'Mark as Read';
+        readBtn.addEventListener('click', () => handleMarkAsRead(notification.id, item, readBtn));
+        actions.appendChild(readBtn);
+
+        if (notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
+          const linkBtn = document.createElement('button');
+          linkBtn.className = 'notification-action-btn link-btn';
+          linkBtn.textContent = '🔗';
+          linkBtn.title = 'Copy Attachment Link';
+          linkBtn.addEventListener('click', () => handleCopyLink(notification.attachment.url, linkBtn));
+          actions.appendChild(linkBtn);
+        }
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'notification-action-btn delete-btn';
+        deleteBtn.textContent = '×';
+        deleteBtn.title = 'Delete Notification';
+        deleteBtn.addEventListener('click', () => handleDelete(notification.id, item));
+        actions.appendChild(deleteBtn);
+
+        footer.appendChild(actions);
+        item.appendChild(footer);
+
+        elements.notificationsList.appendChild(item);
+      });
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'notifications-error';
+      errorDiv.textContent = `Error: ${error.message}`;
+      elements.notificationsList.replaceChildren(errorDiv);
+    }
+  }
+
+  // Topic list of the Receive tab: All topics, then each configured topic, with unread counts
+  function renderTopicSidebar(notifications) {
+    const unreadCount = topic => notifications
+      .filter(notification => topic === 'all' || notification.topic === topic)
+      .filter(notification => !readMessageIds.includes(notification.id))
+      .length;
+
+    const entries = ['all', ...config.topics];
+    elements.topicSidebar.replaceChildren(...entries.map(topic => {
+      const btn = document.createElement('button');
+      btn.className = 'topic-filter-btn';
+      btn.classList.toggle('active', topic === receiveFilter);
+
+      const name = document.createElement('span');
+      name.className = 'topic-filter-name';
+      name.textContent = topic === 'all' ? 'All topics' : topic;
+      btn.appendChild(name);
+
+      const count = unreadCount(topic);
+      if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'topic-unread-count';
+        badge.textContent = count;
+        btn.appendChild(badge);
+      }
+
+      btn.addEventListener('click', () => {
+        receiveFilter = topic;
+        saveToStorageLocal({ receiveTopicFilter: topic }).catch(() => {});
+        loadNotifications();
+      });
+      return btn;
+    }));
+  }
+
+  function formatTime(unixTimestamp) {
+    const date = new Date(unixTimestamp * 1000);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 1) {
+      return 'Just now';
+    } else if (diffMins < 60) {
+      return `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    } else {
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+  }
+
+  async function loadLocalState() {
+    try {
+      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds', 'receiveTopicFilter']);
+      readMessageIds = result.readMessageIds || [];
+      deletedMessageIds = result.deletedMessageIds || [];
+      receiveFilter = result.receiveTopicFilter || 'all';
+    } catch (error) {
+      console.error('Error loading local state:', error);
+    }
+  }
+
+  async function handleMarkAsRead(messageId, itemElement, btnElement) {
+    const index = readMessageIds.indexOf(messageId);
+    if (index > -1) {
+      // Make unread
+      readMessageIds.splice(index, 1);
+      itemElement.classList.remove('read');
+      btnElement.title = 'Mark as Read';
+    } else {
+      // Make read
+      readMessageIds.push(messageId);
+      itemElement.classList.add('read');
+      btnElement.title = 'Mark as Unread';
+    }
+
+    try {
+      await saveToStorageLocal({ readMessageIds: readMessageIds });
+    } catch (error) {
+      console.error('Error saving readMessageIds:', error);
+    }
+  }
+
+  async function handleDelete(messageId, itemElement) {
+    try {
+      if (!deletedMessageIds.includes(messageId)) {
+        deletedMessageIds.push(messageId);
+        await saveToStorageLocal({ deletedMessageIds: deletedMessageIds });
+      }
+
+      itemElement.remove();
+
+      const index = readMessageIds.indexOf(messageId);
+      if (index > -1) {
+        readMessageIds.splice(index, 1);
+        await saveToStorageLocal({ readMessageIds: readMessageIds });
+      }
+
+      if (elements.notificationsList.children.length === 0) {
+        elements.notificationsList.innerHTML = '<div class="notifications-empty">No recent notifications</div>';
+      }
+    } catch (error) {
+      console.error('Error deleting notification locally:', error);
+      showStatus('Failed to delete notification', 'error');
+    }
+  }
+
+  async function handleCopyLink(url, btnElement) {
+    try {
+      await navigator.clipboard.writeText(url);
+      const originalTitle = btnElement.title;
+      btnElement.title = 'Copied!';
+      btnElement.style.color = 'var(--primary-light)';
+
+      showStatus('Attachment link copied!', 'success');
+
+      setTimeout(() => {
+        btnElement.title = originalTitle;
+        btnElement.style.color = '';
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      showStatus('Failed to copy link', 'error');
+    }
+  }
+
+  async function handleMarkAllRead() {
+    if (currentNotifications.length === 0) return;
+
+    let updated = false;
+    currentNotifications.forEach(notification => {
+      if (!readMessageIds.includes(notification.id)) {
+        readMessageIds.push(notification.id);
+        updated = true;
+      }
+    });
+
+    if (updated) {
+      try {
+        await saveToStorageLocal({ readMessageIds: readMessageIds });
+        showStatus('All marked as read', 'success');
+      } catch (error) {
+        console.error('Error saving readMessageIds:', error);
+        showStatus('Failed to mark all as read', 'error');
+      }
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (currentNotifications.length === 0) return;
+
+    const scope = receiveFilter === 'all' ? '' : ` in topic "${receiveFilter}"`;
+    if (!confirm(`Are you sure you want to delete all notifications${scope}?`)) {
+      return;
+    }
+
+    try {
+      let updatedDeleted = false;
+      let updatedRead = false;
+
+      currentNotifications.forEach(notification => {
+        if (!deletedMessageIds.includes(notification.id)) {
+          deletedMessageIds.push(notification.id);
+          updatedDeleted = true;
+        }
+        const readIndex = readMessageIds.indexOf(notification.id);
+        if (readIndex > -1) {
+          readMessageIds.splice(readIndex, 1);
+          updatedRead = true;
+        }
+      });
+
+      if (updatedDeleted) {
+        await saveToStorageLocal({ deletedMessageIds: deletedMessageIds });
+      }
+      if (updatedRead) {
+        await saveToStorageLocal({ readMessageIds: readMessageIds });
+      }
+
+      showStatus('All notifications deleted', 'success');
+    } catch (error) {
+      console.error('Error performing bulk delete:', error);
+      showStatus('Failed to delete all', 'error');
     }
   }
 

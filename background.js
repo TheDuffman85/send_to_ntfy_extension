@@ -6,25 +6,61 @@ if (typeof importScripts === 'function') {
     importScripts('ntfy.js');
 }
 
+// WebSocket & Background Sync State
+let ws = null;
+let wsUrl = null; // URL the current socket was opened with, to detect configuration changes
+let reconnectTimer = null;
+let keepaliveTimer = null;
+let reconnectDelay = 5000;
+const MAX_RECONNECT_DELAY = 60000;
+// Chrome stops an idle extension service worker after 30 s. Since Chrome 116, WebSocket traffic resets
+// that timer, but ntfy only sends a keepalive every 45 s by default, so send a small frame of our own.
+// ntfy reads and discards client frames of up to 64 bytes.
+const WS_KEEPALIVE_INTERVAL = 20000;
+const MAX_HISTORY_ITEMS = 50;
+const MAX_SEEN_IDS_PER_TOPIC = 200;
+// How long the read-access check of the topics is reused
+const READABLE_TOPICS_TTL = 60 * 60 * 1000;
+// Window fetched silently the first time a topic is synced
+const INITIAL_SYNC_SINCE = '24h';
+
+
 const PARENT_MENU_ID = 'ntfy-parent';
 const SEND_SELECTION_ID = 'ntfy-send-selection';
 const SEND_IMAGE_ID = 'ntfy-send-image';
 const SEND_LINK_ID = 'ntfy-send-link'; // Replaced SEND_PAGE_ID
 const SEND_TAB_ID = 'ntfy-send-tab';
 
-// Initialize context menu on install and startup
+// Initialize context menu, WebSocket, and alarms on install and startup
 chrome.runtime.onInstalled.addListener(() => {
+    // Replaced by the per-topic topicSyncState
+    chrome.storage.local.remove('lastNotificationId');
     updateContextMenu();
+    initWebSocket();
+    setupAlarm();
 });
 
 chrome.runtime.onStartup.addListener(() => {
     updateContextMenu();
+    initWebSocket();
+    setupAlarm();
 });
 
-// Listen for storage changes to update menu when topics change
+// Listen for storage changes to update context menu, WebSocket config, and unread badge
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes.topics) {
-        updateContextMenu();
+    if (area === 'sync') {
+        if (changes.topics || changes.apiUrl || changes.accessToken) {
+            updateContextMenu();
+            initWebSocket();
+        }
+    }
+    if (area === 'local') {
+        if (changes.accessToken) {
+            initWebSocket();
+        }
+        if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
+            updateUnreadBadge();
+        }
     }
 });
 
@@ -41,10 +77,11 @@ async function updateContextMenu() {
         return;
     }
 
-    // Create a single parent menu "Send to ntfy" for ALL contexts
+    // Create a single parent menu dynamically from manifest name
+    const manifest = chrome.runtime.getManifest();
     chrome.contextMenus.create({
         id: PARENT_MENU_ID,
-        title: 'Send to ntfy',
+        title: manifest.name,
         contexts: ['all']
     });
 
@@ -213,14 +250,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     try {
         if (menuId === SEND_SELECTION_ID || menuId.startsWith(SEND_SELECTION_ID)) {
-            // Send selected text
+            // Send selected text, with the page URL as title if enabled
             await NtfyAPI.sendNotification(config, topic, {
-                message: info.selectionText
+                message: info.selectionText,
+                title: pageUrlTitle(config, tab)
             });
             showBadge('✓', '#4CAF50');
         } else if (menuId === SEND_IMAGE_ID || menuId.startsWith(SEND_IMAGE_ID)) {
-            // Send image
-            await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl);
+            // Send image, with the page URL as title if enabled
+            await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl, '', pageUrlTitle(config, tab));
             showBadge('✓', '#4CAF50');
         } else if (menuId === SEND_LINK_ID || menuId.startsWith(SEND_LINK_ID)) {
             // Send link URL
@@ -252,8 +290,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                 console.error('Failed to retrieve link text:', e);
             }
 
+            let message = urlToSend;
+            if (config.includeUrl && tab && tab.url) {
+                const formattedUrl = tab.url.replace(/\/$/, '');
+                message = `${message}\n\nSent from: ${formattedUrl}`;
+            }
+
             await NtfyAPI.sendNotification(config, topic, {
-                message: urlToSend,
+                message: message,
                 title: titleToSend
             });
             showBadge('✓', '#4CAF50');
@@ -271,12 +315,389 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 });
 
+// "Include current tab's URL": the page URL, used as the message title
+function pageUrlTitle(config, tab) {
+    return config.includeUrl && tab && tab.url ? tab.url.replace(/\/$/, '') : '';
+}
+
 // Show a temporary badge on the extension icon
+// Show a temporary badge on the extension icon (restores unread count after 2s)
 function showBadge(text, color) {
     chrome.action.setBadgeText({ text: text });
     chrome.action.setBadgeBackgroundColor({ color: color });
 
     setTimeout(() => {
-        chrome.action.setBadgeText({ text: '' });
+        updateUnreadBadge();
     }, 2000);
 }
+
+// ========================================
+// WebSocket & Background Sync Logic
+// ========================================
+
+async function initWebSocket() {
+    const config = await NtfyAPI.getConfig();
+    if (!config.apiUrl || config.topics.length === 0) {
+        console.log('ntfy is not configured, skipping WebSocket connection.');
+        closeWebSocket();
+        return;
+    }
+
+    const topics = await getReadableTopics(config);
+    if (topics.length === 0) {
+        console.log('No configured topic is readable, skipping WebSocket connection.');
+        closeWebSocket();
+        return;
+    }
+    const subscription = { ...config, topics };
+
+    if (ws) {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            let expectedUrl = null;
+            try {
+                expectedUrl = buildWsUrl(subscription).url;
+            } catch (e) {}
+            if (wsUrl === expectedUrl) {
+                return;
+            }
+            console.log('Configuration changed, reconnecting WebSocket...');
+        }
+    }
+
+    connectWebSocket(subscription);
+}
+
+// ntfy rejects a subscription to several topics if any one of them isn't readable, and a topic the
+// token can only send to is a normal setup. So subscribe to, and poll, the readable topics only.
+let readableTopicsCache = { key: null, topics: [], time: 0 };
+async function getReadableTopics(config) {
+    const key = JSON.stringify([config.apiUrl, config.accessToken, config.topics]);
+    if (readableTopicsCache.key === key && Date.now() - readableTopicsCache.time < READABLE_TOPICS_TTL) {
+        return readableTopicsCache.topics;
+    }
+
+    const access = await Promise.all(config.topics.map(topic => NtfyAPI.canReadTopic(config, topic)));
+    // A topic the server couldn't be asked about (null) is kept, and the result isn't cached
+    const topics = config.topics.filter((topic, i) => access[i] !== false);
+    const skipped = config.topics.filter((topic, i) => access[i] === false);
+    if (skipped.length > 0) {
+        console.log(`Not receiving from topics without read access: ${skipped.join(', ')}`);
+    }
+    if (!access.includes(null)) {
+        readableTopicsCache = { key, topics, time: Date.now() };
+    }
+    return topics;
+}
+
+function startKeepalive(socket) {
+    stopKeepalive();
+    keepaliveTimer = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send('keepalive');
+        }
+    }, WS_KEEPALIVE_INTERVAL);
+}
+
+function stopKeepalive() {
+    if (keepaliveTimer) {
+        clearInterval(keepaliveTimer);
+        keepaliveTimer = null;
+    }
+}
+
+function closeWebSocket() {
+    stopKeepalive();
+    if (ws) {
+        ws.onclose = null;
+        ws.close();
+        ws = null;
+        wsUrl = null;
+    }
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+}
+
+// Returns { url, logUrl }: url may carry the credentials in ?auth=, logUrl never does
+function buildWsUrl(config) {
+    let apiUrl = config.apiUrl;
+    if (!/^https?:\/\//i.test(apiUrl)) {
+        apiUrl = 'https://' + apiUrl;
+    }
+
+    // Host only, like the HTTP calls: credentials embedded in the URL must not end up in the WebSocket URL
+    const urlObj = new URL(apiUrl);
+    const scheme = urlObj.protocol === 'http:' ? 'ws:' : 'wss:';
+    const logUrl = `${scheme}//${urlObj.host}/${config.topics.join(',')}/ws`;
+
+    // Browsers can't set headers on a WebSocket, so ntfy accepts the Authorization header value in ?auth=
+    const auth = NtfyAPI.buildAuthHeaderValue(config.accessToken, config.apiUrl);
+    const url = auth ? `${logUrl}?auth=${NtfyAPI.base64UrlEncode(auth)}` : logUrl;
+
+    return { url, logUrl };
+}
+
+async function connectWebSocket(config) {
+    closeWebSocket();
+
+    try {
+        const { url, logUrl } = buildWsUrl(config);
+        console.log('Connecting WebSocket to:', logUrl);
+        ws = new WebSocket(url);
+        wsUrl = url;
+
+        const socket = ws;
+        ws.onopen = () => {
+            console.log('WebSocket connected successfully.');
+            reconnectDelay = 5000;
+            startKeepalive(socket);
+            syncMissedMessages();
+            updateUnreadBadge(); // Initial badge sync
+        };
+
+        ws.onmessage = async (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                if (message.event === 'message') {
+                    await handleIncomingMessage(message);
+                }
+            } catch (e) {
+                console.error('Error processing WebSocket message:', e);
+            }
+        };
+
+        ws.onclose = (event) => {
+            stopKeepalive();
+            console.log(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason}. Reconnecting...`);
+            scheduleReconnect();
+        };
+
+        // Don't log the event or the exception: they contain the URL, and with it the ?auth= credentials
+        ws.onerror = () => {
+            console.error('WebSocket error');
+        };
+    } catch (error) {
+        console.error('Failed to create WebSocket:', error.name);
+        scheduleReconnect();
+    }
+}
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+
+    console.log(`Scheduling WebSocket reconnect in ${reconnectDelay / 1000}s...`);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+        initWebSocket();
+    }, reconnectDelay);
+}
+
+async function handleIncomingMessage(notification) {
+    console.log('Received notification:', notification.id, notification.title);
+    await processMessage(notification, { notify: true });
+}
+
+// The live socket and the catch-up poll both read-modify-write the history and the sync state.
+// Run those updates one at a time so neither overwrites the other's.
+let storageQueue = Promise.resolve();
+function serialized(task) {
+    const run = storageQueue.then(task);
+    storageQueue = run.catch(() => {});
+    return run;
+}
+
+// Per topic, topicSyncState holds the server time of the newest message seen (the next poll's
+// since=, inclusive) and the ids of the latest messages, to skip the ones a poll returns again.
+// since is null until the topic's first message.
+function processMessage(notification, { notify }) {
+    return serialized(async () => {
+        const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
+        const state = topicSyncState[notification.topic] || { since: null, ids: [] };
+        if (state.ids.includes(notification.id)) {
+            return;
+        }
+
+        state.ids = [...state.ids, notification.id].slice(-MAX_SEEN_IDS_PER_TOPIC);
+        if (state.since === null || notification.time > state.since) {
+            state.since = notification.time;
+        }
+        topicSyncState[notification.topic] = state;
+        await chrome.storage.local.set({ topicSyncState });
+
+        const added = await saveNotificationToHistory(notification);
+        if (added && notify) {
+            showDesktopNotification(notification);
+        }
+    });
+}
+
+// Resolves to true if the notification was added, false if it was already there or deleted
+async function saveNotificationToHistory(notification) {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['receivedNotifications', 'deletedMessageIds'], (result) => {
+            let history = result.receivedNotifications || [];
+            const deletedIds = result.deletedMessageIds || [];
+
+            if (deletedIds.includes(notification.id)) {
+                resolve(false);
+                return;
+            }
+
+            if (history.some(n => n.id === notification.id)) {
+                resolve(false);
+                return;
+            }
+
+            history.unshift(notification);
+
+            if (history.length > MAX_HISTORY_ITEMS) {
+                history = history.slice(0, MAX_HISTORY_ITEMS);
+            }
+
+            chrome.storage.local.set({ receivedNotifications: history }, () => {
+                resolve(true);
+            });
+        });
+    });
+}
+
+function showDesktopNotification(notification) {
+    const priorityLabels = {
+        1: '⇊ Min',
+        2: '↓ Low',
+        4: '↑ High',
+        5: '⇈ Urgent'
+    };
+    const priorityLabel = priorityLabels[notification.priority] ? ` [${priorityLabels[notification.priority]}]` : '';
+
+    const buttons = [];
+    if (notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
+        buttons.push({ title: '🔗 Open Attachment' });
+    }
+
+    chrome.notifications.create(notification.id, {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: (notification.title || 'Notification') + priorityLabel,
+        message: notification.message || '',
+        contextMessage: `Topic: ${notification.topic}`,
+        buttons: buttons,
+        requireInteraction: notification.priority >= 4
+    });
+}
+
+// Handle desktop notification button clicks (Open attachment URL in new tab)
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+    if (buttonIndex === 0) {
+        chrome.storage.local.get(['receivedNotifications'], (result) => {
+            const history = result.receivedNotifications || [];
+            const notification = history.find(n => n.id === notificationId);
+            if (notification && notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
+                chrome.tabs.create({ url: notification.attachment.url });
+            }
+        });
+    }
+});
+
+// Concurrent callers (socket open, alarm, popup) share the sync already running
+let syncInFlight = null;
+function syncMissedMessages() {
+    if (!syncInFlight) {
+        syncInFlight = runSync().finally(() => {
+            syncInFlight = null;
+        });
+    }
+    return syncInFlight;
+}
+
+async function runSync() {
+    const config = await NtfyAPI.getConfig();
+    if (!config.apiUrl || config.topics.length === 0) return;
+
+    const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
+    const topics = await getReadableTopics(config);
+
+    for (const topic of topics) {
+        // A topic synced for the first time gets its recent history without desktop notifications
+        const state = topicSyncState[topic];
+        const since = state && state.since !== null ? state.since : INITIAL_SYNC_SINCE;
+
+        try {
+            const messages = await NtfyAPI.getNotifications(config, topic, since);
+            messages.sort((a, b) => a.time - b.time);
+            for (const notification of messages) {
+                await processMessage(notification, { notify: Boolean(state) });
+            }
+            if (!state) {
+                await serialized(async () => {
+                    const current = await chrome.storage.local.get(['topicSyncState']);
+                    const states = current.topicSyncState || {};
+                    if (!states[topic]) {
+                        states[topic] = { since: null, ids: [] };
+                        await chrome.storage.local.set({ topicSyncState: states });
+                    }
+                });
+            }
+        } catch (error) {
+            console.error(`Failed to sync missed messages for topic ${topic}:`, error.message);
+        }
+    }
+
+    // Forget removed topics, so adding one back starts with a silent sync again
+    await serialized(async () => {
+        const current = await chrome.storage.local.get(['topicSyncState']);
+        const states = current.topicSyncState || {};
+        const stale = Object.keys(states).filter(topic => !config.topics.includes(topic));
+        if (stale.length > 0) {
+            stale.forEach(topic => delete states[topic]);
+            await chrome.storage.local.set({ topicSyncState: states });
+        }
+    });
+}
+
+function setupAlarm() {
+    chrome.alarms.create('ws-keepalive', { periodInMinutes: 1 });
+}
+
+// Alarm Listener for keep-alive and missed sync
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'ws-keepalive') {
+        console.log('Keep-alive alarm fired, ensuring WebSocket is connected...');
+        initWebSocket();
+        syncMissedMessages();
+    }
+});
+
+async function updateUnreadBadge() {
+    chrome.storage.local.get(['receivedNotifications', 'readMessageIds', 'deletedMessageIds'], (result) => {
+        const history = result.receivedNotifications || [];
+        const readIds = result.readMessageIds || [];
+        const deletedIds = result.deletedMessageIds || [];
+
+        // Unread count = history items that are NOT deleted AND NOT read
+        const unreadCount = history
+            .filter(n => !deletedIds.includes(n.id))
+            .filter(n => !readIds.includes(n.id))
+            .length;
+
+        if (unreadCount > 0) {
+            chrome.action.setBadgeText({ text: unreadCount.toString() });
+            chrome.action.setBadgeBackgroundColor({ color: '#f44336' });
+        } else {
+            chrome.action.setBadgeText({ text: '' });
+        }
+    });
+}
+
+// Listen for manual sync requests from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'sync') {
+        console.log('Sync request received from popup, forcing sync...');
+        syncMissedMessages()
+            .then(() => sendResponse({ success: true }))
+            .catch(() => sendResponse({ success: false }));
+        return true;
+    }
+});
