@@ -23,6 +23,10 @@ const MAX_SEEN_IDS_PER_TOPIC = 200;
 const READABLE_TOPICS_TTL = 60 * 60 * 1000;
 // Window fetched silently the first time a topic is synced
 const INITIAL_SYNC_SINCE = '24h';
+// ntfy limits the requests of each visitor (by default a burst of 60, then one every 5 s). After an
+// HTTP 429, the background makes no requests for this long, so the limit can recover for sending
+// and downloads instead of being used up again by reconnects and catch-up polls.
+const RATE_LIMIT_PAUSE = 2 * 60 * 1000;
 
 
 const PARENT_MENU_ID = 'ntfy-parent';
@@ -343,7 +347,14 @@ async function initWebSocket() {
         return;
     }
 
+    if (await waitForRateLimit()) {
+        return;
+    }
+
     const topics = await getReadableTopics(config);
+    if (await waitForRateLimit()) {
+        return;
+    }
     if (topics.length === 0) {
         console.log('No configured topic is readable, skipping WebSocket connection.');
         closeWebSocket();
@@ -369,14 +380,33 @@ async function initWebSocket() {
 
 // ntfy rejects a subscription to several topics if any one of them isn't readable, and a topic the
 // token can only send to is a normal setup. So subscribe to, and poll, the readable topics only.
+// The result is also kept in storage.session (memory only), so a restarted service worker doesn't ask again.
 let readableTopicsCache = { key: null, topics: [], time: 0 };
 async function getReadableTopics(config) {
     const key = JSON.stringify([config.apiUrl, config.accessToken, config.topics]);
+    if (readableTopicsCache.key !== key && chrome.storage.session) {
+        try {
+            const stored = (await chrome.storage.session.get(['readableTopicsCache'])).readableTopicsCache;
+            if (stored) {
+                readableTopicsCache = stored;
+            }
+        } catch (e) {}
+    }
     if (readableTopicsCache.key === key && Date.now() - readableTopicsCache.time < READABLE_TOPICS_TTL) {
         return readableTopicsCache.topics;
     }
 
-    const access = await Promise.all(config.topics.map(topic => NtfyAPI.canReadTopic(config, topic)));
+    let access;
+    try {
+        access = await Promise.all(config.topics.map(topic => NtfyAPI.canReadTopic(config, topic)));
+    } catch (error) {
+        if (error.status !== 429) {
+            throw error;
+        }
+        await noteRateLimited();
+        // Keep the last known result (even if outdated), or try all topics
+        return readableTopicsCache.key === key ? readableTopicsCache.topics : config.topics;
+    }
     // A topic the server couldn't be asked about (null) is kept, and the result isn't cached
     const topics = config.topics.filter((topic, i) => access[i] !== false);
     const skipped = config.topics.filter((topic, i) => access[i] === false);
@@ -385,6 +415,9 @@ async function getReadableTopics(config) {
     }
     if (!access.includes(null)) {
         readableTopicsCache = { key, topics, time: Date.now() };
+        if (chrome.storage.session) {
+            chrome.storage.session.set({ readableTopicsCache }).catch(() => {});
+        }
     }
     return topics;
 }
@@ -483,15 +516,55 @@ async function connectWebSocket(config) {
     }
 }
 
-function scheduleReconnect() {
+// delay: wait this long instead of the next backoff step (used while rate limited)
+function scheduleReconnect(delay) {
     if (reconnectTimer) return;
 
-    console.log(`Scheduling WebSocket reconnect in ${reconnectDelay / 1000}s...`);
+    const wait = delay || reconnectDelay;
+    console.log(`Scheduling WebSocket reconnect in ${Math.ceil(wait / 1000)}s...`);
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+        if (!delay) {
+            reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+        }
         initWebSocket();
-    }, reconnectDelay);
+    }, wait);
+}
+
+// While rate limited, leave an open socket alone and schedule the reconnect for after the pause.
+// Resolves to true if rate limited.
+async function waitForRateLimit() {
+    const pause = await rateLimitRemaining();
+    if (pause === 0) {
+        return false;
+    }
+    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        console.log(`Server request limit reached, connecting again in ${Math.ceil(pause / 1000)}s.`);
+        scheduleReconnect(pause);
+    }
+    return true;
+}
+
+// The pause is kept in storage.session, so a restarted service worker keeps to it
+let rateLimitedUntil = null;
+async function noteRateLimited() {
+    rateLimitedUntil = Date.now() + RATE_LIMIT_PAUSE;
+    console.log('Server request limit reached (HTTP 429), pausing background requests.');
+    if (chrome.storage.session) {
+        await chrome.storage.session.set({ rateLimitedUntil }).catch(() => {});
+    }
+}
+
+async function rateLimitRemaining() {
+    if (rateLimitedUntil === null) {
+        rateLimitedUntil = 0;
+        if (chrome.storage.session) {
+            try {
+                rateLimitedUntil = (await chrome.storage.session.get(['rateLimitedUntil'])).rateLimitedUntil || 0;
+            } catch (e) {}
+        }
+    }
+    return Math.max(0, rateLimitedUntil - Date.now());
 }
 
 async function handleIncomingMessage(notification) {
@@ -513,7 +586,8 @@ function serialized(task) {
 // since is null until the topic's first message.
 function processMessage(notification, { notify }) {
     return serialized(async () => {
-        const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
+        const { topicSyncState = {}, sentMessageIds = [] } =
+            await chrome.storage.local.get(['topicSyncState', 'sentMessageIds']);
         const state = topicSyncState[notification.topic] || { since: null, ids: [] };
         if (state.ids.includes(notification.id)) {
             return;
@@ -527,7 +601,8 @@ function processMessage(notification, { notify }) {
         await chrome.storage.local.set({ topicSyncState });
 
         const added = await saveNotificationToHistory(notification);
-        if (added && notify) {
+        // No desktop notification for a message this extension sent itself (NtfyAPI.markAsSent)
+        if (added && notify && !sentMessageIds.includes(notification.id)) {
             showDesktopNotification(notification);
         }
     });
@@ -615,9 +690,11 @@ function syncMissedMessages() {
 async function runSync() {
     const config = await NtfyAPI.getConfig();
     if (!config.apiUrl || config.topics.length === 0) return;
+    if (await rateLimitRemaining() > 0) return;
 
     const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
     const topics = await getReadableTopics(config);
+    if (await rateLimitRemaining() > 0) return;
 
     for (const topic of topics) {
         // A topic synced for the first time gets its recent history without desktop notifications
@@ -641,6 +718,10 @@ async function runSync() {
                 });
             }
         } catch (error) {
+            if (error.status === 429) {
+                await noteRateLimited();
+                break;
+            }
             console.error(`Failed to sync missed messages for topic ${topic}:`, error.message);
         }
     }
@@ -657,6 +738,10 @@ async function runSync() {
     });
 }
 
+function isWebSocketOpen() {
+    return Boolean(ws && ws.readyState === WebSocket.OPEN);
+}
+
 function setupAlarm() {
     chrome.alarms.create('ws-keepalive', { periodInMinutes: 1 });
 }
@@ -666,7 +751,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'ws-keepalive') {
         console.log('Keep-alive alarm fired, ensuring WebSocket is connected...');
         initWebSocket();
-        syncMissedMessages();
+        // While the socket is open, messages arrive live, and each (re)connect catches up on missed ones.
+        // Polling every topic each minute on top of that runs into ntfy's request limit (HTTP 429).
+        if (!isWebSocketOpen()) {
+            syncMissedMessages();
+        }
     }
 });
 
@@ -694,6 +783,10 @@ async function updateUnreadBadge() {
 // Listen for manual sync requests from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'sync') {
+        if (isWebSocketOpen()) {
+            sendResponse({ success: true });
+            return false;
+        }
         console.log('Sync request received from popup, forcing sync...');
         syncMissedMessages()
             .then(() => sendResponse({ success: true }))

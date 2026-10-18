@@ -195,6 +195,7 @@ const NtfyAPI = {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
+        await this.markAsSent(response);
         return response;
     },
 
@@ -244,6 +245,7 @@ const NtfyAPI = {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
+        await this.markAsSent(response);
         return response;
     },
 
@@ -287,10 +289,38 @@ const NtfyAPI = {
     },
 
     /**
+     * Remember a message this extension published, so it shows as read on the Receive tab and gets
+     * no desktop notification when it comes back from the server
+     * @param {Response} response - ntfy's publish response, the message as JSON
+     * @returns {Promise<void>}
+     */
+    async markAsSent(response) {
+        try {
+            const { id } = await response.clone().json();
+            if (!id) {
+                return;
+            }
+            const { readMessageIds = [], sentMessageIds = [] } =
+                await chrome.storage.local.get(['readMessageIds', 'sentMessageIds']);
+            await chrome.storage.local.set({
+                readMessageIds: readMessageIds.includes(id) ? readMessageIds : [...readMessageIds, id],
+                sentMessageIds: [...sentMessageIds, id].slice(-200)
+            });
+            // The message can come back over the WebSocket before the publish response arrives
+            if (chrome.notifications) {
+                chrome.notifications.clear(id);
+            }
+        } catch (e) {
+            // No message JSON in the response: nothing to remember
+        }
+    },
+
+    /**
      * Check whether the configured credentials can read a topic (ntfy's GET /<topic>/auth)
      * @param {Object} config - Configuration object with apiUrl and accessToken
      * @param {string} topic
      * @returns {Promise<boolean|null>} - true or false, or null if the server couldn't be asked
+     * @throws {Error} - with status 429 when the server's request limit was reached
      */
     async canReadTopic(config, topic) {
         try {
@@ -304,8 +334,14 @@ const NtfyAPI = {
             if (response.status === 401 || response.status === 403) {
                 return false;
             }
+            if (response.status === 429) {
+                throw Object.assign(new Error('HTTP 429: Too Many Requests'), { status: 429 });
+            }
             return null;
         } catch (e) {
+            if (e.status === 429) {
+                throw e;
+            }
             return null;
         }
     },
@@ -332,7 +368,7 @@ const NtfyAPI = {
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw Object.assign(new Error(`HTTP ${response.status}: ${response.statusText}`), { status: response.status });
         }
 
         const text = await response.text();

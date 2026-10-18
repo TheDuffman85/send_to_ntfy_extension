@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Priority & Theme chips
     priorityChips: document.getElementById('priority-chips'),
     themeChips: document.getElementById('theme-chips'),
+    defaultTabChips: document.getElementById('default-tab-chips'),
 
     // Advanced options
     advancedToggle: document.getElementById('advanced-toggle'),
@@ -48,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Status
     status: document.getElementById('status'),
+    receiveStatus: document.getElementById('receive-status'),
     settingsStatus: document.getElementById('settings-status'),
 
     // Settings inputs
@@ -81,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     accessToken: '',
 
     theme: 'auto',
+    defaultTab: 'receive',
     pageUrl: '',
     sendAsZipEnabled: false
   };
@@ -88,7 +91,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let tags = []; // State for tags
   let readMessageIds = []; // State for read notifications
   let deletedMessageIds = []; // State for deleted notifications (client-side only)
-  let activeTab = 'send'; // Active tab state
+  let pendingDeleteId = null; // Message whose delete button waits for the confirming click
+  let pendingDeleteTimer = null;
+  let deleteAllArmed = false;
+  let deleteAllTimer = null;
+  let listPointerDown = false; // A press on the Receive list, during which it must not be rebuilt
+  let listRefreshPending = false;
+  let listRefreshTimer = null;
+  let activeTab = null; // Active tab state, set by switchTab() in init()
   let receiveFilter = 'all'; // Topic shown on the Receive tab, or 'all'
   // Opened with the header button in a browser tab instead of the toolbar popup
   const pageParams = new URLSearchParams(location.search);
@@ -110,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SEND_AS_ZIP_SETTING_KEY = 'sendAsZipEnabled';
   // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl', SEND_AS_ZIP_SETTING_KEY];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl', 'defaultTab', SEND_AS_ZIP_SETTING_KEY];
   const STORED_FILES_KEY = 'storedFiles';
   const LEGACY_STORED_FILE_KEY = 'storedFile';
 
@@ -148,9 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
     applyUrlTitle();
-    if (pageParams.get('tab') === 'receive') {
-      switchTab('receive');
-    } else {
+    const requestedTab = pageParams.get('tab');
+    switchTab(requestedTab === 'send' || requestedTab === 'receive' ? requestedTab : config.defaultTab);
+    if (activeTab === 'send') {
       // Set focus on message input when popup opens
       elements.messageInput.focus();
     }
@@ -175,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
         accessToken: accessToken,
 
         theme: items.theme || 'auto',
+        defaultTab: items.defaultTab === 'send' ? 'send' : 'receive',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
         includeUrl: items.includeUrl === true,
         sendAsZipEnabled: items[SEND_AS_ZIP_SETTING_KEY] === true
@@ -210,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
       theme: config.theme,
+      defaultTab: config.defaultTab,
       includeUrl: elements.includeUrlCheckbox.checked,
       sendAsZipEnabled: config.sendAsZipEnabled
     };
@@ -231,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateTopicDropdown();
       renderTopics(); // Re-render to ensure state consistency
       updateThemeChipsUI(); // Ensure UI reflects state
+      updateDefaultTabChipsUI();
       updateServerAccessUI(config.apiUrl, config.accessToken);
 
     } catch (error) {
@@ -320,6 +333,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     config.theme = chip.dataset.theme;
     applyTheme();
+  }
+
+  // ==================
+  // Default Tab
+  // ==================
+
+  function updateDefaultTabChipsUI() {
+    document.querySelectorAll('#default-tab-chips .chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.defaultTab === config.defaultTab);
+    });
+  }
+
+  function handleDefaultTabChange(e) {
+    const chip = e.target.closest('.chip');
+    if (!chip || !chip.dataset.defaultTab) return;
+
+    config.defaultTab = chip.dataset.defaultTab;
+    updateDefaultTabChipsUI();
+    saveConfig();
   }
 
   // ==================
@@ -829,6 +861,9 @@ document.addEventListener('DOMContentLoaded', () => {
       saveConfig();
     });
 
+    // Default tab chips
+    elements.defaultTabChips.addEventListener('click', handleDefaultTabChange);
+
     // Open ntfy URL
     elements.openUrlBtn.addEventListener('click', openNtfyUrl);
 
@@ -889,11 +924,34 @@ document.addEventListener('DOMContentLoaded', () => {
           loadStoredFiles();
         }
         if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
-          console.log('Local notifications history changed, re-rendering...');
-          loadLocalState().then(() => {
-            loadNotifications();
-          });
+          scheduleNotificationsRefresh();
         }
+      }
+    });
+
+    // Rebuilding the list between press and release swallows the click on its buttons, so hold
+    // refreshes back while a press is on it
+    elements.notificationsList.addEventListener('pointerdown', () => {
+      listPointerDown = true;
+    });
+    document.addEventListener('pointerup', releaseListPointer);
+    document.addEventListener('pointercancel', releaseListPointer);
+
+    // An armed delete button disarms on a click anywhere else or on Escape. Bubbling, so the click
+    // that armed it has already been handled and is let through.
+    document.addEventListener('click', (e) => {
+      if (pendingDeleteId && !e.target.closest('.delete-btn.confirming')) {
+        clearPendingDelete();
+      }
+      if (deleteAllArmed && !e.target.closest('#delete-all-btn')) {
+        setDeleteAllArmed(false);
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && (pendingDeleteId || deleteAllArmed)) {
+        e.preventDefault(); // Keeps the popup open
+        clearPendingDelete();
+        setDeleteAllArmed(false);
       }
     });
 
@@ -961,6 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateServerAccessUI(config.apiUrl, config.accessToken);
 
     updateThemeChipsUI();
+    updateDefaultTabChipsUI();
 
     elements.mainView.classList.remove('active');
     elements.settingsView.classList.add('active');
@@ -1096,6 +1155,15 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       elements.status.classList.remove('visible');
     }, 3000);
+  }
+
+  function showReceiveStatus(message, type) {
+    elements.receiveStatus.textContent = message;
+    elements.receiveStatus.className = `status visible ${type}`;
+
+    setTimeout(() => {
+      elements.receiveStatus.classList.remove('visible');
+    }, 4000);
   }
 
   function showSettingsStatus(message, type) {
@@ -1676,9 +1744,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const localData = await getFromStorageLocal(['receivedNotifications']);
+      const localData = await getFromStorageLocal(['receivedNotifications', THUMBNAIL_CACHE_KEY]);
       const allNotifications = (localData.receivedNotifications || [])
         .filter(notification => !deletedMessageIds.includes(notification.id));
+      thumbnailCache = localData[THUMBNAIL_CACHE_KEY] || {};
+      pruneThumbnails(allNotifications);
 
       if (receiveFilter !== 'all' && !config.topics.includes(receiveFilter)) {
         receiveFilter = 'all';
@@ -1732,8 +1802,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const message = document.createElement('div');
         message.className = 'notification-message';
-        message.textContent = notification.message || '';
+        message.replaceChildren(...linkify(notification.message || ''));
         item.appendChild(message);
+
+        if (isImageAttachment(notification.attachment)) {
+          item.appendChild(createImagePreview(notification));
+        }
 
         // Footer for tags and actions
         const footer = document.createElement('div');
@@ -1755,27 +1829,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const actions = document.createElement('div');
         actions.className = 'notification-actions';
 
-        const readBtn = document.createElement('button');
-        readBtn.className = 'notification-action-btn read-btn';
-        readBtn.textContent = '✓';
-        readBtn.title = isRead ? 'Mark as Unread' : 'Mark as Read';
-        readBtn.addEventListener('click', () => handleMarkAsRead(notification.id, item, readBtn));
-        actions.appendChild(readBtn);
+        if (!isRead) {
+          const readBtn = document.createElement('button');
+          readBtn.className = 'notification-action-btn read-btn';
+          readBtn.textContent = '✓';
+          readBtn.title = 'Mark as Read';
+          readBtn.addEventListener('click', () => handleMarkAsRead(notification.id, item, readBtn));
+          actions.appendChild(readBtn);
+        }
 
         if (notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
-          const linkBtn = document.createElement('button');
-          linkBtn.className = 'notification-action-btn link-btn';
-          linkBtn.textContent = '🔗';
-          linkBtn.title = 'Copy Attachment Link';
-          linkBtn.addEventListener('click', () => handleCopyLink(notification.attachment.url, linkBtn));
-          actions.appendChild(linkBtn);
+          const downloadBtn = document.createElement('button');
+          downloadBtn.className = 'notification-action-btn download-btn';
+          downloadBtn.appendChild(createDownloadIcon());
+          downloadBtn.title = notification.attachment.name ? `Download ${notification.attachment.name}` : 'Download attachment';
+          downloadBtn.addEventListener('click', () => handleDownload(notification.attachment, downloadBtn));
+          actions.appendChild(downloadBtn);
         }
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'notification-action-btn delete-btn';
-        deleteBtn.textContent = '×';
-        deleteBtn.title = 'Delete Notification';
-        deleteBtn.addEventListener('click', () => handleDelete(notification.id, item));
+        setDeleteButtonArmed(deleteBtn, notification.id === pendingDeleteId);
+        deleteBtn.addEventListener('click', () => handleDeleteClick(notification.id, item, deleteBtn));
         actions.appendChild(deleteBtn);
 
         footer.appendChild(actions);
@@ -1820,11 +1895,174 @@ document.addEventListener('DOMContentLoaded', () => {
 
       btn.addEventListener('click', () => {
         receiveFilter = topic;
+        setDeleteAllArmed(false);
         saveToStorageLocal({ receiveTopicFilter: topic }).catch(() => {});
         loadNotifications();
       });
       return btn;
     }));
+  }
+
+  // Text and link nodes for a message: http(s) URLs become links that open in a new tab
+  function linkify(text) {
+    const nodes = [];
+    let last = 0;
+    for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
+      // Leave trailing punctuation out of the link, e.g. a full stop after the URL
+      const url = match[0].replace(/[.,;:!?)\]}]+$/, '');
+      if (!NtfyAPI.isHttpUrl(url)) {
+        continue;
+      }
+      nodes.push(document.createTextNode(text.slice(last, match.index)));
+
+      const link = document.createElement('a');
+      link.className = 'notification-link';
+      link.href = url;
+      link.textContent = url;
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        chrome.tabs.create({ url });
+      });
+      nodes.push(link);
+      last = match.index + url.length;
+    }
+    nodes.push(document.createTextNode(text.slice(last)));
+    return nodes;
+  }
+
+  // ==================
+  // Image Previews
+  // ==================
+
+  // Downscaled copies of image attachments, by message id, so the list doesn't load full-size images
+  const THUMBNAIL_CACHE_KEY = 'imageThumbnails';
+  const THUMBNAIL_MAX_SIZE = 320; // px, longest side (shown at up to half that, sharp on HiDPI screens)
+  const THUMBNAIL_MAX_SOURCE_BYTES = 15 * 1024 * 1024;
+  let thumbnailCache = {};
+  const thumbnailJobs = new Map(); // message id -> Promise<string|null>
+  let thumbnailCacheQueue = Promise.resolve();
+
+  function isImageAttachment(attachment) {
+    if (!attachment || !NtfyAPI.isHttpUrl(attachment.url)) {
+      return false;
+    }
+    if (attachment.type) {
+      return attachment.type.startsWith('image/');
+    }
+    return /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(attachment.name || '');
+  }
+
+  function createImagePreview(notification) {
+    const attachment = notification.attachment;
+    const preview = document.createElement('button');
+    preview.className = 'notification-image';
+    preview.title = attachment.name ? `Open ${attachment.name}` : 'Open image';
+    preview.style.display = 'none';
+
+    const img = document.createElement('img');
+    img.alt = attachment.name || 'Image attachment';
+    img.decoding = 'async';
+    img.addEventListener('load', () => { preview.style.display = ''; });
+    img.addEventListener('error', () => {
+      console.warn(`Image preview: could not load ${attachment.name || 'the attachment'}`);
+      preview.remove();
+    });
+    preview.appendChild(img);
+
+    preview.addEventListener('click', () => chrome.tabs.create({ url: attachment.url }));
+
+    getThumbnail(notification).then(src => {
+      if (src) {
+        img.src = src;
+      } else {
+        preview.remove();
+      }
+    });
+    return preview;
+  }
+
+  // Resolves to the thumbnail's data URL, the original URL if it can't be downscaled, or null if expired
+  function getThumbnail(notification) {
+    const id = notification.id;
+    const attachment = notification.attachment;
+    if (thumbnailCache[id]) {
+      return Promise.resolve(thumbnailCache[id]);
+    }
+    if (attachment.expires && attachment.expires * 1000 < Date.now()) {
+      console.warn(`Image preview: ${attachment.name || 'the attachment'} has expired`);
+      return Promise.resolve(null);
+    }
+
+    if (!thumbnailJobs.has(id)) {
+      thumbnailJobs.set(id, (async () => {
+        try {
+          const dataUrl = await createThumbnail(attachment);
+          await storeThumbnail(id, dataUrl);
+          return dataUrl;
+        } catch (e) {
+          if (e.status === 429) {
+            // Server request limit: don't spend another request on the original, try again next time
+            thumbnailJobs.delete(id);
+            return null;
+          }
+          // E.g. the image's server doesn't allow reading it (CORS): show the original, scaled down by CSS
+          console.warn(`Image preview: could not downscale ${attachment.name || 'the attachment'}:`, e.message);
+          return attachment.url;
+        }
+      })());
+    }
+    return thumbnailJobs.get(id);
+  }
+
+  async function createThumbnail(attachment) {
+    if (attachment.size && attachment.size > THUMBNAIL_MAX_SOURCE_BYTES) {
+      throw new Error('Image too large');
+    }
+
+    const response = await fetch(attachment.url);
+    if (!response.ok) {
+      throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+    }
+    const bitmap = await createImageBitmap(await response.blob());
+    const scale = Math.min(1, THUMBNAIL_MAX_SIZE / Math.max(bitmap.width, bitmap.height));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    return canvas.toDataURL('image/webp', 0.8);
+  }
+
+  // Stored one write at a time, so thumbnails made at the same time don't overwrite each other
+  function storeThumbnail(id, dataUrl) {
+    thumbnailCache[id] = dataUrl;
+    thumbnailCacheQueue = thumbnailCacheQueue.then(async () => {
+      const stored = (await getFromStorageLocal([THUMBNAIL_CACHE_KEY]))[THUMBNAIL_CACHE_KEY] || {};
+      stored[id] = dataUrl;
+      await saveToStorageLocal({ [THUMBNAIL_CACHE_KEY]: stored });
+    }).catch(error => console.error('Error saving image thumbnail:', error));
+    return thumbnailCacheQueue;
+  }
+
+  // Drop thumbnails of messages that left the history or were deleted
+  function pruneThumbnails(notifications) {
+    const ids = new Set(notifications.map(notification => notification.id));
+    if (Object.keys(thumbnailCache).every(id => ids.has(id))) {
+      return;
+    }
+
+    thumbnailCacheQueue = thumbnailCacheQueue.then(async () => {
+      const stored = (await getFromStorageLocal([THUMBNAIL_CACHE_KEY]))[THUMBNAIL_CACHE_KEY] || {};
+      Object.keys(stored).forEach(id => {
+        if (!ids.has(id)) {
+          delete stored[id];
+        }
+      });
+      thumbnailCache = stored;
+      await saveToStorageLocal({ [THUMBNAIL_CACHE_KEY]: stored });
+    }).catch(error => console.error('Error pruning image thumbnails:', error));
   }
 
   function formatTime(unixTimestamp) {
@@ -1856,123 +2094,204 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function handleMarkAsRead(messageId, itemElement, btnElement) {
-    const index = readMessageIds.indexOf(messageId);
-    if (index > -1) {
-      // Make unread
-      readMessageIds.splice(index, 1);
-      itemElement.classList.remove('read');
-      btnElement.title = 'Mark as Read';
-    } else {
-      // Make read
-      readMessageIds.push(messageId);
-      itemElement.classList.add('read');
-      btnElement.title = 'Mark as Unread';
-    }
+  function scheduleNotificationsRefresh() {
+    clearTimeout(listRefreshTimer);
+    // Coalesces the burst of writes a sync makes, one per received message
+    listRefreshTimer = setTimeout(() => {
+      if (listPointerDown) {
+        listRefreshPending = true;
+        return;
+      }
+      loadLocalState().then(loadNotifications);
+    }, 100);
+  }
 
+  function releaseListPointer() {
+    if (!listPointerDown) return;
+    listPointerDown = false;
+    if (listRefreshPending) {
+      listRefreshPending = false;
+      // After the click event that follows this release
+      setTimeout(scheduleNotificationsRefresh, 0);
+    }
+  }
+
+  // Read-modify-write of an ID list against storage, not the popup's copy, which a refresh may have
+  // replaced with an older one
+  async function updateStoredIds(key, update) {
+    const result = await getFromStorageLocal([key]);
+    const ids = update(result[key] || []);
+    await saveToStorageLocal({ [key]: ids });
+    return ids;
+  }
+
+  async function handleMarkAsRead(messageId, itemElement, btnElement) {
+    itemElement.classList.add('read');
+    btnElement.remove();
     try {
-      await saveToStorageLocal({ readMessageIds: readMessageIds });
+      readMessageIds = await updateStoredIds('readMessageIds',
+        ids => ids.includes(messageId) ? ids : [...ids, messageId]);
     } catch (error) {
       console.error('Error saving readMessageIds:', error);
+      showReceiveStatus('Failed to mark as read', 'error');
     }
+  }
+
+  const DELETE_CONFIRM_TIMEOUT = 4000;
+
+  function setDeleteButtonArmed(btnElement, armed) {
+    btnElement.classList.toggle('confirming', armed);
+    btnElement.textContent = armed ? 'Delete?' : '×';
+    btnElement.title = armed ? 'Click again to delete' : 'Delete Notification';
+  }
+
+  // The first click arms the button, a second one within a few seconds deletes
+  function handleDeleteClick(messageId, itemElement, btnElement) {
+    if (pendingDeleteId === messageId) {
+      clearPendingDelete();
+      handleDelete(messageId, itemElement);
+      return;
+    }
+    clearPendingDelete();
+    pendingDeleteId = messageId;
+    setDeleteButtonArmed(btnElement, true);
+    pendingDeleteTimer = setTimeout(clearPendingDelete, DELETE_CONFIRM_TIMEOUT);
+  }
+
+  function clearPendingDelete() {
+    clearTimeout(pendingDeleteTimer);
+    pendingDeleteId = null;
+    elements.notificationsList.querySelectorAll('.delete-btn.confirming')
+      .forEach(btn => setDeleteButtonArmed(btn, false));
   }
 
   async function handleDelete(messageId, itemElement) {
     try {
-      if (!deletedMessageIds.includes(messageId)) {
-        deletedMessageIds.push(messageId);
-        await saveToStorageLocal({ deletedMessageIds: deletedMessageIds });
-      }
-
       itemElement.remove();
-
-      const index = readMessageIds.indexOf(messageId);
-      if (index > -1) {
-        readMessageIds.splice(index, 1);
-        await saveToStorageLocal({ readMessageIds: readMessageIds });
-      }
-
       if (elements.notificationsList.children.length === 0) {
         elements.notificationsList.innerHTML = '<div class="notifications-empty">No recent notifications</div>';
       }
+
+      deletedMessageIds = await updateStoredIds('deletedMessageIds',
+        ids => ids.includes(messageId) ? ids : [...ids, messageId]);
+      readMessageIds = await updateStoredIds('readMessageIds',
+        ids => ids.filter(id => id !== messageId));
     } catch (error) {
       console.error('Error deleting notification locally:', error);
-      showStatus('Failed to delete notification', 'error');
+      showReceiveStatus('Failed to delete notification', 'error');
     }
   }
 
-  async function handleCopyLink(url, btnElement) {
+  // Download an attachment under its own name. A cross-origin link ignores the download attribute, so
+  // fetch the file and save it from a blob URL.
+  async function handleDownload(attachment, btnElement) {
+    btnElement.disabled = true;
     try {
-      await navigator.clipboard.writeText(url);
-      const originalTitle = btnElement.title;
-      btnElement.title = 'Copied!';
-      btnElement.style.color = 'var(--primary-light)';
-
-      showStatus('Attachment link copied!', 'success');
-
-      setTimeout(() => {
-        btnElement.title = originalTitle;
-        btnElement.style.color = '';
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to copy link:', err);
-      showStatus('Failed to copy link', 'error');
+      let response;
+      // ntfy refills its request limit by one request every 5 s, so retry a 429 a couple of times
+      for (let attempt = 0; ; attempt++) {
+        try {
+          response = await fetch(attachment.url);
+        } catch (error) {
+          // E.g. the server doesn't allow reading the file (CORS): open it in a tab, where ntfy's
+          // Content-Disposition: attachment makes the browser download it
+          console.warn(`Download: could not fetch ${attachment.name || 'the attachment'}:`, error.message);
+          chrome.tabs.create({ url: attachment.url });
+          return;
+        }
+        if (response.status !== 429 || attempt >= DOWNLOAD_RETRY_DELAYS.length) {
+          break;
+        }
+        showReceiveStatus('Server is busy, retrying the download…', 'warning');
+        await new Promise(resolve => setTimeout(resolve, DOWNLOAD_RETRY_DELAYS[attempt]));
+      }
+      if (!response.ok) {
+        showReceiveStatus(downloadErrorMessage(response.status), 'error');
+        return;
+      }
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = attachment.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (error) {
+      console.error('Download failed:', error);
+      showReceiveStatus('Download failed', 'error');
+    } finally {
+      btnElement.disabled = false;
     }
+  }
+
+  const DOWNLOAD_RETRY_DELAYS = [6000, 12000];
+
+  function downloadErrorMessage(status) {
+    if (status === 404 || status === 410) {
+      return 'Download failed: the attachment has expired or was deleted';
+    }
+    if (status === 429) {
+      return 'Download failed: the server\'s request limit was reached, try again later';
+    }
+    return `Download failed (HTTP ${status})`;
+  }
+
+  function createDownloadIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('fill', 'currentColor');
+    path.setAttribute('d', 'M5 20h14v-2H5v2zm14-11h-4V3H9v6H5l7 7 7-7z');
+    svg.appendChild(path);
+    return svg;
   }
 
   async function handleMarkAllRead() {
     if (currentNotifications.length === 0) return;
 
-    let updated = false;
-    currentNotifications.forEach(notification => {
-      if (!readMessageIds.includes(notification.id)) {
-        readMessageIds.push(notification.id);
-        updated = true;
-      }
-    });
-
-    if (updated) {
-      try {
-        await saveToStorageLocal({ readMessageIds: readMessageIds });
-        showStatus('All marked as read', 'success');
-      } catch (error) {
-        console.error('Error saving readMessageIds:', error);
-        showStatus('Failed to mark all as read', 'error');
-      }
+    const visibleIds = currentNotifications.map(notification => notification.id);
+    try {
+      readMessageIds = await updateStoredIds('readMessageIds',
+        ids => [...ids, ...visibleIds.filter(id => !ids.includes(id))]);
+      showStatus('All marked as read', 'success');
+    } catch (error) {
+      console.error('Error saving readMessageIds:', error);
+      showStatus('Failed to mark all as read', 'error');
     }
   }
 
+  function setDeleteAllArmed(armed) {
+    deleteAllArmed = armed;
+    clearTimeout(deleteAllTimer);
+    elements.deleteAllBtn.classList.toggle('confirming', armed);
+    const scope = receiveFilter === 'all' ? 'all' : `all in "${receiveFilter}"`;
+    elements.deleteAllBtn.textContent = armed ? `Delete ${scope}?` : '🗑 Delete all';
+    elements.deleteAllBtn.title = armed ? 'Click again to delete' : 'Delete all';
+    if (armed) {
+      deleteAllTimer = setTimeout(() => setDeleteAllArmed(false), DELETE_CONFIRM_TIMEOUT);
+    }
+  }
+
+  // Like a single delete: the first click arms the button, the second deletes
   async function handleDeleteAll() {
     if (currentNotifications.length === 0) return;
 
-    const scope = receiveFilter === 'all' ? '' : ` in topic "${receiveFilter}"`;
-    if (!confirm(`Are you sure you want to delete all notifications${scope}?`)) {
+    if (!deleteAllArmed) {
+      setDeleteAllArmed(true);
       return;
     }
+    setDeleteAllArmed(false);
 
+    const visibleIds = currentNotifications.map(notification => notification.id);
     try {
-      let updatedDeleted = false;
-      let updatedRead = false;
-
-      currentNotifications.forEach(notification => {
-        if (!deletedMessageIds.includes(notification.id)) {
-          deletedMessageIds.push(notification.id);
-          updatedDeleted = true;
-        }
-        const readIndex = readMessageIds.indexOf(notification.id);
-        if (readIndex > -1) {
-          readMessageIds.splice(readIndex, 1);
-          updatedRead = true;
-        }
-      });
-
-      if (updatedDeleted) {
-        await saveToStorageLocal({ deletedMessageIds: deletedMessageIds });
-      }
-      if (updatedRead) {
-        await saveToStorageLocal({ readMessageIds: readMessageIds });
-      }
-
+      deletedMessageIds = await updateStoredIds('deletedMessageIds',
+        ids => [...ids, ...visibleIds.filter(id => !ids.includes(id))]);
+      readMessageIds = await updateStoredIds('readMessageIds',
+        ids => ids.filter(id => !visibleIds.includes(id)));
       showStatus('All notifications deleted', 'success');
     } catch (error) {
       console.error('Error performing bulk delete:', error);

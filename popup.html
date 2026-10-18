@@ -3,16 +3,12 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=350">
+  <meta name="viewport" content="width=600">
   <link rel="stylesheet" href="styles.css">
   <style>
     /* Popup-specific layout */
+    /* Same width on both tabs, wide enough for the Receive tab's topic list */
     body {
-      width: 350px;
-    }
-
-    /* Wider on the Receive tab, for the topic list */
-    body.receive-active {
       width: 600px;
     }
 
@@ -21,8 +17,7 @@
     }
 
     /* Opened in a browser tab: follow the tab's width, up to a readable maximum */
-    body.page-mode,
-    body.page-mode.receive-active {
+    body.page-mode {
       width: auto;
       max-width: 1100px;
       margin: 0 auto;
@@ -38,7 +33,7 @@
   </style>
 </head>
 
-<body data-theme="auto">
+<body data-theme="auto" class="receive-active">
   <!-- Header -->
   <div class="header">
     <div class="header-left">
@@ -79,13 +74,13 @@
   <div class="view active" id="main-view">
     <!-- Tab Bar -->
     <div class="tab-bar">
-      <button class="tab-btn active" data-tab="send">Send</button>
-      <button class="tab-btn" data-tab="receive">Receive</button>
+      <button class="tab-btn" data-tab="send">Send</button>
+      <button class="tab-btn active" data-tab="receive">Receive</button>
     </div>
 
     <!-- Tab Contents -->
     <!-- Send Tab -->
-    <div class="tab-content active" id="tab-content-send">
+    <div class="tab-content" id="tab-content-send">
       <div class="main-content" id="main-content">
         <!-- Topic Selection -->
         <div class="form-group">
@@ -184,7 +179,7 @@
     </div>
 
     <!-- Receive Tab -->
-    <div class="tab-content" id="tab-content-receive">
+    <div class="tab-content active" id="tab-content-receive">
       <div class="main-content receive-layout">
         <!-- Topic list: All topics, then each configured topic -->
         <nav class="topic-sidebar" id="topic-sidebar" aria-label="Topics"></nav>
@@ -197,6 +192,7 @@
               <button class="control-btn" id="delete-all-btn" title="Delete all">🗑 Delete all</button>
             </div>
           </div>
+          <div class="status" id="receive-status"></div>
           <div class="notifications-list" id="notifications-list">
             <div class="notifications-loading">Loading notifications...</div>
           </div>
@@ -238,6 +234,15 @@
           <label for="include-url-checkbox">Include current tab's URL</label>
         </div>
         <p class="form-hint">Put the active tab's URL in the title</p>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">Default Tab</div>
+        <div class="chips" id="default-tab-chips">
+          <button class="chip" data-default-tab="send">📤 Send</button>
+          <button class="chip active" data-default-tab="receive">📥 Receive</button>
+        </div>
+        <p class="form-hint">Tab shown when the extension opens</p>
       </div>
 
       <div class="form-group">
