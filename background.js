@@ -3,7 +3,7 @@
 
 // Import shared utilities (only in Service Worker context)
 if (typeof importScripts === 'function') {
-    importScripts('ntfy.js');
+    importScripts('ntfy.js', 'markdown.js');
 }
 
 // WebSocket & Background Sync State
@@ -656,11 +656,25 @@ function showDesktopNotification(notification) {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
         title: (notification.title || 'Notification') + priorityLabel,
-        message: notification.message || '',
+        message: notificationText(notification),
         contextMessage: `Topic: ${notification.topic}`,
         buttons: buttons,
         requireInteraction: notification.priority >= 4
     });
+}
+
+// Notifications show plain text, so Markdown messages lose their formatting characters
+function notificationText(notification) {
+    const text = notification.message || '';
+    if (notification.content_type !== 'text/markdown') {
+        return text;
+    }
+    try {
+        return Markdown.toPlainText(text);
+    } catch (e) {
+        console.warn('Could not convert Markdown for the notification:', e);
+        return text; // Better the raw text than no notification
+    }
 }
 
 // Handle desktop notification button clicks (Open attachment URL in new tab)

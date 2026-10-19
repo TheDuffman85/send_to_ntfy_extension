@@ -1802,7 +1802,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const message = document.createElement('div');
         message.className = 'notification-message';
-        message.replaceChildren(...linkify(notification.message || ''));
+        const text = notification.message || '';
+        // Rendered only for messages sent as Markdown, like the ntfy web app does
+        const markdown = notification.content_type === 'text/markdown'
+          ? Markdown.render(text, { createLink: createMessageLink })
+          : null;
+        message.classList.toggle('markdown', Boolean(markdown));
+        message.replaceChildren(...(markdown || linkify(text)));
         item.appendChild(message);
 
         if (isImageAttachment(notification.attachment)) {
@@ -1914,20 +1920,26 @@ document.addEventListener('DOMContentLoaded', () => {
         continue;
       }
       nodes.push(document.createTextNode(text.slice(last, match.index)));
-
-      const link = document.createElement('a');
-      link.className = 'notification-link';
-      link.href = url;
-      link.textContent = url;
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        chrome.tabs.create({ url });
-      });
-      nodes.push(link);
+      nodes.push(createMessageLink(url, [document.createTextNode(url)]));
       last = match.index + url.length;
     }
     nodes.push(document.createTextNode(text.slice(last)));
     return nodes;
+  }
+
+  // Link in a message that opens in a new tab. The tooltip shows the real target, as Markdown
+  // link text can claim to be a different URL.
+  function createMessageLink(url, content) {
+    const link = document.createElement('a');
+    link.className = 'notification-link';
+    link.href = url;
+    link.title = url;
+    link.append(...content);
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url });
+    });
+    return link;
   }
 
   // ==================

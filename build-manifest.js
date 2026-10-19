@@ -10,7 +10,7 @@ try {
     if (target === 'firefox') {
         // Firefox requires background.scripts instead of background.service_worker
         if (manifest.background && manifest.background.service_worker) {
-            manifest.background.scripts = ['ntfy.js', manifest.background.service_worker];
+            manifest.background.scripts = ['ntfy.js', 'markdown.js', manifest.background.service_worker];
             delete manifest.background.service_worker;
         }
     } else if (target === 'chrome') {

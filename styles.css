@@ -1121,6 +1121,122 @@ body.filepicker-page {
     white-space: pre-wrap;
 }
 
+/* Markdown messages: compact, so they fit the list like plain ones */
+.notification-message.markdown {
+    white-space: normal;
+}
+
+.notification-message.markdown > :first-child,
+.notification-message.markdown li > :first-child,
+.notification-message.markdown blockquote > :first-child {
+    margin-top: 0;
+}
+
+.notification-message.markdown > :last-child,
+.notification-message.markdown li > :last-child,
+.notification-message.markdown blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+.notification-message.markdown p,
+.notification-message.markdown ul,
+.notification-message.markdown ol,
+.notification-message.markdown pre,
+.notification-message.markdown blockquote,
+.notification-message.markdown .markdown-table {
+    margin: 6px 0;
+}
+
+.notification-message.markdown h1,
+.notification-message.markdown h2,
+.notification-message.markdown h3,
+.notification-message.markdown h4,
+.notification-message.markdown h5,
+.notification-message.markdown h6 {
+    margin: 8px 0 4px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.notification-message.markdown h1 { font-size: 17px; }
+.notification-message.markdown h2 { font-size: 16px; }
+.notification-message.markdown h3 { font-size: 15px; }
+.notification-message.markdown h4,
+.notification-message.markdown h5,
+.notification-message.markdown h6 { font-size: 14px; }
+
+.notification-message.markdown ul,
+.notification-message.markdown ol {
+    padding-left: 20px;
+}
+
+.notification-message.markdown li > p {
+    margin: 0;
+}
+
+.notification-message.markdown li.task-item {
+    list-style: none;
+}
+
+.notification-message.markdown li.task-item input {
+    margin: 0 6px 0 -18px;
+    vertical-align: middle;
+}
+
+.notification-message.markdown code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--bg-main);
+}
+
+.notification-message.markdown pre {
+    padding: 8px;
+    border-radius: 4px;
+    background: var(--bg-main);
+    overflow-x: auto;
+}
+
+.notification-message.markdown pre code {
+    padding: 0;
+    background: none;
+    white-space: pre;
+}
+
+.notification-message.markdown blockquote {
+    padding-left: 10px;
+    border-left: 3px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.notification-message.markdown hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 8px 0;
+}
+
+.notification-message.markdown .markdown-table {
+    overflow-x: auto;
+}
+
+.notification-message.markdown table {
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.notification-message.markdown th,
+.notification-message.markdown td {
+    padding: 3px 8px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.notification-message.markdown th {
+    font-weight: 600;
+    background: var(--bg-main);
+}
+
 .notification-link {
     color: var(--primary-light);
     text-decoration: underline;
