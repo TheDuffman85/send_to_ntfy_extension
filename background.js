@@ -3,7 +3,7 @@
 
 // Import shared utilities (only in Service Worker context)
 if (typeof importScripts === 'function') {
-    importScripts('ntfy.js', 'markdown.js');
+    importScripts('ntfy.js', 'markdown.js', 'emojis.js');
 }
 
 // WebSocket & Background Sync State
@@ -843,7 +843,7 @@ function showDesktopNotification(notification) {
     if (notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
         buttons.push({ title: `🔗 Open attachment (${new URL(notification.attachment.url).host})` });
     }
-    let message = notificationText(notification);
+    let message = Emojis.formatMessage({ ...notification, message: notificationText(notification) });
     if (NtfyAPI.isHttpUrl(notification.click)) {
         message += `\n↗ ${new URL(notification.click).host}`;
     }
@@ -851,7 +851,7 @@ function showDesktopNotification(notification) {
     createNotification(notification.id, {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
-        title: (notification.title || 'Notification') + priorityLabel,
+        title: (notification.title ? Emojis.formatTitle(notification) : 'Notification') + priorityLabel,
         message,
         contextMessage: `Topic: ${notification.topic}`,
         buttons: buttons,
@@ -921,7 +921,9 @@ function showCatchUpNotifications(notifications) {
 
     const newest = [...notifications].sort((a, b) => b.time - a.time);
     const lines = newest.slice(0, MAX_CATCH_UP_NOTIFICATIONS)
-        .map(notification => notification.title || notificationText(notification).split('\n')[0]);
+        .map(notification => notification.title
+            ? Emojis.formatTitle(notification)
+            : Emojis.formatMessage({ ...notification, message: notificationText(notification) }).split('\n')[0]);
     lines.push(`… and ${newest.length - lines.length} more`);
     const topics = [...new Set(newest.map(notification => notification.topic))];
 

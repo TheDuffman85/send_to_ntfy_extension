@@ -414,6 +414,12 @@ strong {
     background-color: var(--field-bg-hover);
 }
 
+/* Room for the emoji button in its corner */
+.tags-container {
+    position: relative;
+    padding-right: 36px;
+}
+
 .topics-container:focus-within,
 .tags-container:focus-within {
     border-bottom-color: var(--border-focus);
@@ -1132,18 +1138,9 @@ body.filepicker-page {
 }
 
 .notification-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 4px;
-}
-
-.notification-tag {
     font-size: 12px;
-    background-color: var(--border-color);
     color: var(--text-secondary);
-    padding: 2px 6px;
-    border-radius: 4px;
+    overflow-wrap: anywhere;
 }
 
 .notifications-loading,
@@ -1757,6 +1754,106 @@ body.filepicker-page {
 .composer-btn.insert-url-btn:hover:not(:disabled),
 .composer-btn.insert-url-btn:focus-visible {
     opacity: 1;
+}
+
+/* Emoji picker button: in the tags field's corner, like the URL button in the message field */
+.composer-btn.emoji-btn {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 28px;
+    height: 28px;
+    opacity: 0.55;
+}
+
+.composer-btn.emoji-btn:hover:not(:disabled),
+.composer-btn.emoji-btn:focus-visible,
+.composer-btn.emoji-btn[aria-expanded="true"] {
+    opacity: 1;
+}
+
+/* Floats above the tags field (placed by popup.js), sized like ntfy's */
+.emoji-picker {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 900; /* Below the tooltip */
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 0 4px 12px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.emoji-picker[hidden] {
+    display: none;
+}
+
+.emoji-search {
+    width: calc(100% - 12px);
+    padding: 4px 0;
+    border: none;
+    border-bottom: 2px solid var(--border-color);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    outline: none;
+}
+
+.emoji-search:focus {
+    border-bottom-color: var(--border-focus);
+}
+
+.emoji-search::placeholder {
+    color: var(--text-placeholder);
+}
+
+.emoji-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    flex: 0 1 240px;
+    min-height: 0;
+    overflow-y: auto;
+    margin-top: 8px;
+    scrollbar-width: thin;
+}
+
+.emoji-category {
+    width: 100%;
+    margin: 6px 0 2px;
+    color: var(--text-primary);
+}
+
+.emoji-list.searching .emoji-category {
+    display: none;
+}
+
+.emoji-option {
+    width: 34px;
+    height: 34px;
+    margin: 2px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    font-size: 24px;
+    line-height: 34px;
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.emoji-option:hover,
+.emoji-option:focus-visible {
+    opacity: 1;
+    background-color: rgba(51, 133, 116, 0.1);
+}
+
+.emoji-option[hidden] {
+    display: none;
 }
 
 /* No web page address to insert: a click says why */

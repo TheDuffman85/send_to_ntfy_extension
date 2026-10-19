@@ -21,6 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
     tagsContainer: document.getElementById('tags-container'),
     newTagInput: document.getElementById('new-tag-input'),
     tagInputHint: document.getElementById('tag-input-hint'),
+    emojiBtn: document.getElementById('emoji-btn'),
+    emojiPicker: document.getElementById('emoji-picker'),
+    emojiSearch: document.getElementById('emoji-search'),
+    emojiList: document.getElementById('emoji-list'),
 
 
     // File handling
@@ -907,6 +911,12 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.newTagInput.addEventListener('keydown', handleTagKeydown);
     elements.newTagInput.addEventListener('input', updateTagInputHint);
     elements.tagsContainer.addEventListener('click', handleTagRemove);
+    elements.emojiBtn.addEventListener('click', () => setEmojiPickerOpen(elements.emojiPicker.hidden));
+    elements.emojiSearch.addEventListener('input', filterEmojis);
+    elements.emojiList.addEventListener('click', handleEmojiPick);
+    // Follows the field when the options scroll or the popup changes size
+    elements.composerOptions.addEventListener('scroll', positionEmojiPicker);
+    window.addEventListener('resize', positionEmojiPicker);
 
     // Further send options above the message bar
     elements.composerToggle.addEventListener('click', () => {
@@ -951,8 +961,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (deleteAllArmed && !e.target.closest('#delete-all-btn')) {
         setDeleteAllArmed(false);
       }
+      if (!elements.emojiPicker.hidden && !e.target.closest('#emoji-picker, #emoji-btn')) {
+        setEmojiPickerOpen(false);
+      }
     });
     document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !elements.emojiPicker.hidden) {
+        e.preventDefault(); // Keeps the popup open
+        setEmojiPickerOpen(false);
+        elements.emojiBtn.focus();
+        return;
+      }
       if (e.key === 'Escape' && (pendingDeleteId || deleteAllArmed)) {
         e.preventDefault(); // Keeps the popup open
         clearPendingDelete();
@@ -1256,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
       badge.appendChild(removeSpan);
       elements.tagsContainer.insertBefore(badge, elements.newTagInput);
     });
+    positionEmojiPicker(); // The field may have got another line
   }
 
   function handleTagKeydown(e) {
@@ -1264,12 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const value = elements.newTagInput.value.trim();
 
       if (value) {
-        // Add tag
-        if (!tags.includes(value)) {
-          tags.push(value);
-          renderTags();
-          saveToStorage({ lastTags: [...tags] });
-        }
+        addTag(value);
         elements.newTagInput.value = '';
         updateTagInputHint(); // Hide hint after clearing
       }
@@ -1280,6 +1295,82 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTags();
         saveToStorage({ lastTags: [...tags] });
       }
+    }
+  }
+
+  function addTag(value) {
+    if (!tags.includes(value)) {
+      tags.push(value);
+      renderTags();
+      saveToStorage({ lastTags: [...tags] });
+    }
+  }
+
+  // Emoji picker: built on first use; stays open for picking several, like ntfy's
+  function setEmojiPickerOpen(open) {
+    if (open && !elements.emojiList.hasChildNodes()) {
+      buildEmojiList();
+    }
+    elements.emojiPicker.hidden = !open;
+    elements.emojiBtn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      positionEmojiPicker();
+      elements.emojiSearch.focus();
+    }
+  }
+
+  // Above the tags field, its right edge at the field's. Fixed, so the scrolling options don't
+  // cut it off. Lengths set on it are zoomed with the page, measured ones are not: divide by the zoom.
+  function positionEmojiPicker() {
+    if (elements.emojiPicker.hidden) return;
+    const picker = elements.emojiPicker;
+    const field = elements.tagsContainer.getBoundingClientRect();
+    const zoom = field.height / elements.tagsContainer.offsetHeight || 1;
+    const margin = 8;
+    const viewportWidth = window.innerWidth / zoom;
+
+    // Gets smaller if there isn't enough room above the field
+    picker.style.maxHeight = `${Math.max(field.top / zoom - 4 - margin, 120)}px`;
+    picker.style.maxWidth = `${viewportWidth - 2 * margin}px`;
+    const left = Math.min(field.right / zoom, viewportWidth - margin) - picker.offsetWidth;
+    picker.style.left = `${Math.max(left, margin)}px`;
+    picker.style.top = `${Math.max(field.top / zoom - 4 - picker.offsetHeight, margin)}px`;
+  }
+
+  function buildEmojiList() {
+    Emojis.pickerCategories().forEach(category => {
+      const heading = document.createElement('div');
+      heading.className = 'emoji-category';
+      heading.textContent = category.name;
+      elements.emojiList.appendChild(heading);
+
+      category.emojis.forEach(emoji => {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'emoji-option';
+        option.textContent = emoji.emoji;
+        option.title = emoji.title;
+        option.setAttribute('aria-label', emoji.title);
+        option.dataset.tag = emoji.tag;
+        option.emoji = emoji; // For the search
+        elements.emojiList.appendChild(option);
+      });
+    });
+  }
+
+  // Like ntfy: any of the words may match, and the category names hide while searching
+  function filterEmojis() {
+    const words = elements.emojiSearch.value.toLowerCase().split(' ').filter(Boolean);
+    elements.emojiList.classList.toggle('searching', words.length > 0);
+    elements.emojiList.querySelectorAll('.emoji-option').forEach(option => {
+      option.hidden = !Emojis.matches(option.emoji, words);
+    });
+  }
+
+  function handleEmojiPick(e) {
+    const option = e.target.closest('.emoji-option');
+    if (option) {
+      addTag(option.dataset.tag);
     }
   }
 
@@ -1821,7 +1912,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const title = document.createElement('span');
         title.className = 'notification-title';
-        title.textContent = notification.title || 'Notification';
+        title.textContent = notification.title ? Emojis.formatTitle(notification) : 'Notification';
         header.appendChild(title);
 
         const time = document.createElement('span');
@@ -1833,7 +1924,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const message = document.createElement('div');
         message.className = 'notification-message';
-        const text = notification.message || '';
+        const text = Emojis.formatMessage(notification);
         // Rendered only for messages sent as Markdown, like the ntfy web app does
         const markdown = notification.content_type === 'text/markdown'
           ? Markdown.render(text, { createLink: createMessageLink })
@@ -1850,16 +1941,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const footer = document.createElement('div');
         footer.className = 'notification-footer';
 
-        if (notification.tags && notification.tags.length > 0) {
-          const tagsContainer = document.createElement('div');
-          tagsContainer.className = 'notification-tags';
-          notification.tags.forEach(tag => {
-            const tagSpan = document.createElement('span');
-            tagSpan.className = 'notification-tag';
-            tagSpan.textContent = tag;
-            tagsContainer.appendChild(tagSpan);
-          });
-          footer.appendChild(tagsContainer);
+        // Tags that are emojis already show in front of the title or message, like in the ntfy web app
+        const otherTags = Emojis.unmatchedTags(notification.tags);
+        if (otherTags.length > 0) {
+          const tagsLine = document.createElement('div');
+          tagsLine.className = 'notification-tags';
+          tagsLine.textContent = `Tags: ${otherTags.join(', ')}`;
+          footer.appendChild(tagsLine);
         }
 
         // Actions
