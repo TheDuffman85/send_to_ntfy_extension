@@ -985,6 +985,7 @@ body.filepicker-page {
 }
 
 .notification-time {
+    margin-left: auto;
     font-size: 12px;
     color: var(--text-secondary);
     white-space: nowrap;

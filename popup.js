@@ -1915,10 +1915,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const header = document.createElement('div');
         header.className = 'notification-header';
 
-        const title = document.createElement('span');
-        title.className = 'notification-title';
-        title.textContent = notification.title ? Emojis.formatTitle(notification) : 'Notification';
-        header.appendChild(title);
+        // Without a title, only the topic and time show, like in the ntfy web app
+        if (notification.title) {
+          const title = document.createElement('span');
+          title.className = 'notification-title';
+          title.textContent = Emojis.formatTitle(notification);
+          header.appendChild(title);
+        }
 
         const time = document.createElement('span');
         time.className = 'notification-time';

@@ -856,9 +856,10 @@ async function showDesktopNotification(notification) {
     const options = {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
-        title: (notification.title ? Emojis.formatTitle(notification) : 'Notification') + priorityLabel,
+        // Without a title, the topic takes its place, like in the ntfy web app
+        title: (notification.title ? Emojis.formatTitle(notification) : notification.topic) + priorityLabel,
         message,
-        contextMessage: `Topic: ${notification.topic}`,
+        contextMessage: notification.title ? `Topic: ${notification.topic}` : '',
         buttons: buttons,
         requireInteraction: notification.priority >= 4
     };
