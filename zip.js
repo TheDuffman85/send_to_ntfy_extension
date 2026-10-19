@@ -72,6 +72,19 @@ const ZipUtils = (() => {
         return (basename || fallback).replace(/[\u0000-\u001f]/g, '_');
     }
 
+    // Two attached files can have the same name; extracted, one would overwrite the other.
+    // Later ones get a number: "photo.jpg", "photo (2).jpg".
+    function uniqueName(name, usedNames) {
+        const dot = name.lastIndexOf('.');
+        const [base, extension] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+        let candidate = name;
+        for (let number = 2; usedNames.has(candidate.toLowerCase()); number++) {
+            candidate = `${base} (${number})${extension}`;
+        }
+        usedNames.add(candidate.toLowerCase());
+        return candidate;
+    }
+
     function assertUint32(value, label) {
         if (value > 0xffffffff) {
             throw new RangeError(`${label} is too large for a ZIP archive`);
@@ -102,9 +115,10 @@ const ZipUtils = (() => {
         const centralParts = [];
         const timestamp = getDosDateTime(new Date());
         let localOffset = 0;
+        const usedNames = new Set();
 
         for (const [index, file] of files.entries()) {
-            const nameBytes = textEncoder.encode(getEntryName(file.name, index));
+            const nameBytes = textEncoder.encode(uniqueName(getEntryName(file.name, index), usedNames));
             const dataBytes = toBytes(file.data);
 
             if (nameBytes.length > 0xffff) {

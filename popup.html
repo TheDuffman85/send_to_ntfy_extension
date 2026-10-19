@@ -93,7 +93,8 @@
             <!-- Title (Optional) -->
             <div class="form-group">
               <label class="form-label" for="title-input">Title</label>
-              <input type="text" class="form-input" id="title-input">
+              <input type="text" class="form-input" id="title-input"
+                placeholder="Notification title, e.g. Disk space alert">
             </div>
 
             <!-- Message: the message bar's field moves here while the options are open -->
@@ -130,7 +131,6 @@
             <!-- File Attachment -->
             <div class="file-section">
               <div class="file-input-wrapper">
-                <input type="file" class="file-input" id="file-input" multiple>
                 <button class="file-btn" id="file-btn">
                   📎 Attach files
                 </button>
@@ -156,8 +156,17 @@
                 <path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
               </svg>
             </button>
-            <textarea class="composer-input" id="message-input" rows="1" placeholder="Type a message here"
-              aria-label="Message"></textarea>
+            <!-- The message field with the link button in its corner; moves below the title with the options -->
+            <div class="composer-field" id="composer-field">
+              <textarea class="composer-input" id="message-input" rows="1" placeholder="Type a message here"
+                aria-label="Message"></textarea>
+              <button class="composer-btn insert-url-btn" id="insert-url-btn" title="Insert this tab's URL"
+                aria-label="Insert this tab's URL">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
+                </svg>
+              </button>
+            </div>
             <label class="send-another" title="Keep the popup open after sending">
               <input type="checkbox" id="send-another-checkbox">
               <span>Send another</span>
@@ -193,6 +202,19 @@
             <input type="password" class="form-input" id="token-input" placeholder="tk_...">
             <p class="form-hint">For private topics or authenticated servers</p>
           </div>
+
+          <div class="form-group credentials-group">
+            <label class="form-label" for="username-input">Username and password (optional)</label>
+            <div class="credentials-row">
+              <input type="text" class="form-input" id="username-input" placeholder="Username" autocomplete="off"
+                aria-label="Username">
+              <input type="password" class="form-input" id="password-input" placeholder="Password" autocomplete="off"
+                aria-label="Password">
+            </div>
+            <p class="form-hint">Instead of a token. Like the token, stored on this device only.</p>
+          </div>
+          <p class="form-hint insecure-hint" id="insecure-hint" hidden>This server URL uses http: the token or
+            password is sent unencrypted. Use https if the server supports it.</p>
         </div>
       </section>
 
@@ -214,18 +236,6 @@
               live connection to the server.</span>
           </span>
           <input type="checkbox" id="receive-checkbox" aria-label="Receive messages">
-          <span class="switch" aria-hidden="true"><span></span></span>
-        </label>
-      </section>
-
-      <section class="settings-section" aria-labelledby="settings-sending-title">
-        <h2 class="settings-section-title" id="settings-sending-title">Sending</h2>
-        <label class="switch-row">
-          <span class="switch-copy">
-            <span class="switch-title">Include current tab's URL</span>
-            <span class="switch-hint">Puts the active tab's URL in the message title.</span>
-          </span>
-          <input type="checkbox" id="include-url-checkbox" aria-label="Include current tab's URL">
           <span class="switch" aria-hidden="true"><span></span></span>
         </label>
       </section>

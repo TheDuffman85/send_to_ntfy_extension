@@ -44,6 +44,7 @@
     --bg-input: #ffffff;
     --text-primary: #111111;
     --text-secondary: #4a4a4a;
+    --text-placeholder: #8f8f8f; /* Hint text in empty fields, like ntfy's (42 % of the text color) */
     --border-color: #cdd5d2;
     --border-focus: #338574;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -92,6 +93,7 @@ body[data-theme="dark"] {
     --bg-input: #252b2a;
     --text-primary: #f2f4f3;
     --text-secondary: #b9c2bf;
+    --text-placeholder: #878d8b;
     --border-color: #4b5754;
     --border-focus: #4a9d8c;
     --primary-light: #66c0ac; /* text accent: 6.7:1 on the dark inputs */
@@ -113,6 +115,7 @@ body[data-theme="dark"] {
         --bg-input: #252b2a;
         --text-primary: #f2f4f3;
         --text-secondary: #b9c2bf;
+    --text-placeholder: #878d8b;
         --border-color: #4b5754;
         --border-focus: #4a9d8c;
         --primary-light: #66c0ac; /* text accent: 6.7:1 on the dark inputs */
@@ -140,6 +143,20 @@ body {
     font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background-color: var(--bg-main);
     color: var(--text-primary);
+}
+
+/* Form controls don't inherit the page font by default and would use the system font */
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+}
+
+/* Bold is the bundled 600 weight; there's no 700 face, so the browser would fake one */
+b,
+strong {
+    font-weight: 600;
 }
 
 /* ========================================
@@ -307,6 +324,7 @@ body {
 .form-textarea {
     width: 100%;
     padding: 6px 8px 8px;
+    font: inherit; /* Form controls don't inherit the page font by default */
     font-size: 15px;
     background-color: var(--field-bg);
     color: var(--text-primary);
@@ -334,9 +352,7 @@ body {
 .form-input::placeholder,
 .form-textarea::placeholder,
 .topic-input-field::placeholder {
-    font-size: 13px;
-    font-style: italic;
-    color: var(--text-secondary);
+    color: var(--text-placeholder);
 }
 
 /* Tag/Topic input hint: hidden by default, shown when user has input */
@@ -432,7 +448,7 @@ body {
     margin-left: 6px;
     cursor: pointer;
     opacity: 0.8;
-    font-weight: bold;
+    font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -704,7 +720,7 @@ body {
 /* Priority Icons */
 .p-icon {
     margin-right: 4px;
-    font-weight: bold;
+    font-weight: 600;
     font-size: 14px;
 }
 
@@ -1361,6 +1377,29 @@ body.filepicker-page {
     min-width: 0;
 }
 
+/* Username and password below the server URL and token, lined up with them */
+.settings-row .credentials-group,
+.settings-row .insecure-hint {
+    grid-column: 1 / -1;
+}
+
+.credentials-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.settings-section .insecure-hint {
+    margin-top: -8px;
+    color: #f44336;
+    font-style: normal;
+    opacity: 1;
+}
+
+.insecure-hint[hidden] {
+    display: none;
+}
+
 .settings-section .form-input {
     padding: 4px 8px 6px;
 }
@@ -1646,10 +1685,21 @@ body.filepicker-page {
     padding-top: 8px;
 }
 
-.composer-input {
+/* The message field, with the link button inside it at the bottom right */
+.composer-field {
+    position: relative;
     flex: 1;
     min-width: 0;
-    padding: 6px 8px;
+}
+
+#message-slot .composer-field {
+    width: 100%;
+}
+
+.composer-input {
+    display: block;
+    width: 100%;
+    padding: 6px 34px 6px 8px;
     font: inherit;
     font-size: 15px;
     line-height: 1.4;
@@ -1665,11 +1715,6 @@ body.filepicker-page {
     transition: border-color 0.2s, background-color 0.2s;
 }
 
-#message-slot .composer-input {
-    display: block;
-    width: 100%;
-}
-
 .composer-input:hover,
 .composer-input:focus {
     border-bottom-color: var(--border-focus);
@@ -1680,7 +1725,7 @@ body.filepicker-page {
 }
 
 .composer-input::placeholder {
-    color: var(--text-secondary);
+    color: var(--text-placeholder);
 }
 
 .composer-btn {
@@ -1697,6 +1742,26 @@ body.filepicker-page {
     color: var(--text-secondary);
     cursor: pointer;
     transition: background-color 0.2s, color 0.2s;
+}
+
+/* Insert the tab's URL: inside the message field, kept in the background */
+.composer-btn.insert-url-btn {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 28px;
+    height: 28px;
+    opacity: 0.55;
+}
+
+.composer-btn.insert-url-btn:hover:not(:disabled),
+.composer-btn.insert-url-btn:focus-visible {
+    opacity: 1;
+}
+
+/* No web page address to insert: a click says why */
+.composer-btn.insert-url-btn.unavailable {
+    opacity: 0.3;
 }
 
 /* The options toggle, when not receiving */

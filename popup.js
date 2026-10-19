@@ -24,7 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // File handling
-    fileInput: document.getElementById('file-input'),
     fileBtn: document.getElementById('file-btn'),
     filePreview: document.getElementById('file-preview'),
     zipToggle: document.getElementById('zip-toggle'),
@@ -37,6 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Actions
     sendBtn: document.getElementById('send-btn'),
+    insertUrlBtn: document.getElementById('insert-url-btn'),
+    composerField: document.getElementById('composer-field'),
     sendAnotherCheckbox: document.getElementById('send-another-checkbox'),
     markdownCheckbox: document.getElementById('markdown-checkbox'),
 
@@ -47,9 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Settings inputs
     urlInput: document.getElementById('url-input'),
     tokenInput: document.getElementById('token-input'),
+    usernameInput: document.getElementById('username-input'),
+    passwordInput: document.getElementById('password-input'),
+    insecureHint: document.getElementById('insecure-hint'),
     serverAccessBtn: document.getElementById('server-access-btn'),
     serverAccessHint: document.getElementById('server-access-hint'),
-    includeUrlCheckbox: document.getElementById('include-url-checkbox'),
     receiveCheckbox: document.getElementById('receive-checkbox'),
 
     // Receive hint
@@ -79,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
     topics: [],
     apiUrl: '',
     accessToken: '',
+    username: '',
+    password: '',
 
     theme: 'auto',
     popupSize: 'medium',
@@ -99,7 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let listRefreshTimer = null;
   let receiveFilter = 'all'; // Topic shown and sent to, or 'all' (nothing to send to)
   let receiveHintDismissed = false; // The hint about the Receive messages setting is shown only once
-  let autoTitle = ''; // The tab URL last put in the Title field automatically
   let currentNotifications = []; // Currently displayed notifications for the active topic
   let attachments = [];
 
@@ -116,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SEND_AS_ZIP_SETTING_KEY = 'sendAsZipEnabled';
   // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'sendAnotherEnabled', 'markdownEnabled', 'includeUrl', 'receiveEnabled', 'popupSize', SEND_AS_ZIP_SETTING_KEY];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'sendAnotherEnabled', 'markdownEnabled', 'receiveEnabled', 'popupSize', SEND_AS_ZIP_SETTING_KEY];
   const POPUP_SIZES = ['small', 'medium', 'large'];
   // The size is also kept in localStorage, so it applies before the first paint
   // instead of after the asynchronous settings load
@@ -168,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
       elements.headerText.textContent = chrome.runtime.getManifest().name;
     }
 
-    applyUrlTitle();
+    updateInsertUrlButton();
     autoSizeMessageInput();
     // Back from the file picker: show the attached files
     setComposerOptionsOpen(attachments.length > 0 || !config.receiveEnabled);
@@ -187,20 +191,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadConfig() {
     try {
+      // Before reading apiUrl: moves credentials out of it
+      const credentials = await NtfyAPI.getServerCredentials();
       const items = await getFromStorage(STORAGE_KEYS);
       const accessToken = await NtfyAPI.getAccessToken();
       config.pageUrl = await getPageUrl();
       config = {
         ...config,
         topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
-        apiUrl: items.apiUrl || '',
+        apiUrl: NtfyAPI.normalizeServerUrl(items.apiUrl),
         accessToken: accessToken,
+        username: credentials.username,
+        password: credentials.password,
 
         theme: items.theme || 'auto',
         popupSize: POPUP_SIZES.includes(items.popupSize) ? items.popupSize : 'medium',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
         markdownEnabled: items.markdownEnabled === true,
-        includeUrl: items.includeUrl === true,
         receiveEnabled: items.receiveEnabled === true,
         sendAsZipEnabled: items[SEND_AS_ZIP_SETTING_KEY] === true
       };
@@ -208,7 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Restore 'Send another' checkbox state
       elements.sendAnotherCheckbox.checked = config.sendAnotherEnabled;
       elements.markdownCheckbox.checked = config.markdownEnabled;
-      elements.includeUrlCheckbox.checked = config.includeUrl;
       elements.receiveCheckbox.checked = config.receiveEnabled;
       elements.zipCheckbox.checked = config.sendAsZipEnabled;
 
@@ -227,22 +233,37 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function saveConfig() {
+    // Credentials typed into the URL (https://user:password@host) move to their own fields: the URL
+    // is synced to other browsers, the credentials are kept on this device only
+    const server = NtfyAPI.splitServerUrl(elements.urlInput.value);
+    if (server.username || server.password) {
+      elements.urlInput.value = server.url;
+      elements.usernameInput.value = server.username;
+      elements.passwordInput.value = server.password;
+    }
+
     const newConfig = {
-      apiUrl: elements.urlInput.value.trim(),
+      // "ntfy.sh" is saved as "https://ntfy.sh"; the field keeps what was typed until the settings reopen
+      apiUrl: server.url,
       accessToken: elements.tokenInput.value,
+      username: elements.usernameInput.value,
+      password: elements.passwordInput.value,
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
       theme: config.theme,
       popupSize: config.popupSize,
-      includeUrl: elements.includeUrlCheckbox.checked,
       receiveEnabled: elements.receiveCheckbox.checked,
       sendAsZipEnabled: config.sendAsZipEnabled
     };
 
     try {
-      const { accessToken, ...syncedSettings } = newConfig;
-      await saveToStorage(syncedSettings);
-      await NtfyAPI.setAccessToken(accessToken);
+      const { accessToken, username, password, ...syncedSettings } = newConfig;
+      // The writes start right away, so they also complete when the popup is closing
+      await Promise.all([
+        saveToStorage(syncedSettings),
+        NtfyAPI.setAccessToken(accessToken),
+        NtfyAPI.setServerCredentials(username, password)
+      ]);
       config = {
         ...config,
         ...newConfig,
@@ -262,16 +283,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // flush() runs a pending call right away, cancel() drops it
   function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
+    let timeout = null;
+    const debounced = () => {
       clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
+      timeout = setTimeout(() => {
+        timeout = null;
+        func();
+      }, wait);
     };
+    debounced.cancel = () => {
+      clearTimeout(timeout);
+      timeout = null;
+    };
+    debounced.flush = () => {
+      if (timeout !== null) {
+        debounced.cancel();
+        func();
+      }
+    };
+    return debounced;
+  }
+
+  // Settings typed in the server and token fields
+  const debouncedSave = debounce(saveConfig, 1000);
+
+  // The popup closes on any click outside it, often right after typing, and its timers end with it.
+  // Save what is still pending: chrome.storage writes started now still complete.
+  function savePendingChanges() {
+    if (isSettingsView) {
+      addTopicFromInput(); // A topic typed without Enter
+    }
+    debouncedSave.flush();
+    if (draftSaveTimer !== null) {
+      flushDraftSave().catch(error => console.error('Error saving draft:', error));
+    }
   }
 
   // ==================
@@ -483,7 +530,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.fileBtn.disabled = isSending;
-    elements.fileInput.disabled = isSending;
     updateZipToggleUI();
   }
 
@@ -505,35 +551,6 @@ document.addEventListener('DOMContentLoaded', () => {
     config.sendAsZipEnabled = elements.zipCheckbox.checked;
     saveToStorage({ [SEND_AS_ZIP_SETTING_KEY]: config.sendAsZipEnabled }).catch(error => {
       console.error('Error saving ZIP preference:', error);
-    });
-  }
-
-  async function appendStoredFiles(newFiles) {
-    if (newFiles.length === 0) return;
-
-    const existingFiles = await readStoredFiles();
-    const updatedFiles = [...existingFiles, ...newFiles];
-    await persistStoredFiles(updatedFiles);
-    attachments = updatedFiles;
-    renderAttachments();
-  }
-
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = event => {
-        resolve({
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          data: event.target.result
-        });
-      };
-
-      reader.onerror = () => reject(new Error(`Failed to read "${file.name}"`));
-      reader.onabort = () => reject(new Error(`Reading "${file.name}" was cancelled`));
-      reader.readAsDataURL(file);
     });
   }
 
@@ -596,25 +613,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function handleFileSelect(e) {
-    const files = Array.from(e.target.files || []);
-    e.target.value = '';
-    readAndStoreFiles(files);
-  }
-
-  async function readAndStoreFiles(files) {
-    if (files.length === 0 || isSending) return;
-
-    try {
-      // Read the whole selection before writing so a read error does not append a partial batch.
-      const fileRecords = await Promise.all(files.map(readFileAsDataUrl));
-      await appendStoredFiles(fileRecords);
-    } catch (error) {
-      console.error('Error storing files:', error);
-      showStatus(`Failed to attach files: ${error.message}`, 'error');
-    }
-  }
-
   async function handleAttachmentRemove(e) {
     const removeButton = e.target.closest('.file-remove');
     if (!removeButton || isSending) return;
@@ -636,7 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function clearStoredFiles() {
     await persistStoredFiles([]);
     attachments = [];
-    elements.fileInput.value = '';
     renderAttachments();
   }
 
@@ -648,8 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function saveDraftState() {
     const draft = {
-      // An automatically filled tab URL isn't part of the draft: the next popup fills in its own tab's
-      title: elements.titleInput.value === autoTitle ? '' : elements.titleInput.value,
+      title: elements.titleInput.value,
       message: elements.messageInput.value,
       tags: tags, // Save tags array
       priority: selectedPriority
@@ -754,17 +750,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // "Include current tab's URL" puts the URL in the Title field, where it can still be edited.
-  // A title the user typed is left alone.
-  function applyUrlTitle() {
-    const current = elements.titleInput.value.trim();
-    if (current && current !== autoTitle) {
+  // The link button in the message bar inserts the tab's URL. Always there, so it can say why when the
+  // tab's address isn't available; then it is dimmed further.
+  function updateInsertUrlButton() {
+    const available = NtfyAPI.isHttpUrl(config.pageUrl);
+    elements.insertUrlBtn.classList.toggle('unavailable', !available);
+    elements.insertUrlBtn.setAttribute('aria-disabled', String(!available));
+  }
+
+  // Inserts the tab's URL at the cursor (replacing a selection), with a space on either side where
+  // it would otherwise run into the text around it
+  async function insertPageUrl() {
+    const input = elements.messageInput;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    // Asked again: the popup may have opened before the browser let the extension see the tab
+    if (!NtfyAPI.isHttpUrl(config.pageUrl)) {
+      config.pageUrl = await getPageUrl().catch(() => '');
+      updateInsertUrlButton();
+    }
+    const url = config.pageUrl;
+    if (!NtfyAPI.isHttpUrl(url)) {
+      showStatus(url
+        ? 'Only the address of a web page (http or https) can be inserted'
+        : 'The browser doesn\'t share this tab\'s address with the extension (e.g. on browser or add-on store pages)', 'warning');
       return;
     }
 
-    const url = config.includeUrl && NtfyAPI.isHttpUrl(config.pageUrl) ? config.pageUrl.replace(/\/$/, '') : '';
-    elements.titleInput.value = url;
-    autoTitle = url;
+    const before = input.value.slice(0, start);
+    const after = input.value.slice(end);
+    const text = (before && !/\s$/.test(before) ? ' ' : '') + url + (after && !/^\s/.test(after) ? ' ' : '');
+    input.focus();
+    input.setRangeText(text, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true })); // Resizes the field, saves the draft
   }
 
   async function getPageUrl() {
@@ -788,22 +806,27 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.settingsBtn.addEventListener('click', showSettingsView);
     elements.backBtn.addEventListener('click', leaveSettings);
 
-    // Settings Auto-save
-    const debouncedSave = debounce(saveConfig, 1000);
-
+    // Settings Auto-save: while typing, and right away when the field is left
     elements.urlInput.addEventListener('input', () => {
       updateMissingSettings();
-      // showSettingsStatus('Saving...', 'visible');
+      updateInsecureHint();
       debouncedSave();
     });
+    elements.urlInput.addEventListener('change', debouncedSave.flush);
 
-    elements.tokenInput.addEventListener('input', () => {
-      // showSettingsStatus('Saving...', 'visible');
-      debouncedSave();
+    [elements.tokenInput, elements.usernameInput, elements.passwordInput].forEach(input => {
+      input.addEventListener('input', () => {
+        updateInsecureHint();
+        debouncedSave();
+      });
+      input.addEventListener('change', debouncedSave.flush);
     });
 
-    elements.includeUrlCheckbox.addEventListener('change', () => {
-      saveConfig();
+    window.addEventListener('pagehide', savePendingChanges);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        savePendingChanges();
+      }
     });
 
     elements.receiveCheckbox.addEventListener('change', () => {
@@ -855,6 +878,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Send message
     elements.sendBtn.addEventListener('click', sendNotification);
+    elements.insertUrlBtn.addEventListener('click', insertPageUrl);
 
     // Send another checkbox - save state on change
     elements.sendAnotherCheckbox.addEventListener('change', () => {
@@ -874,7 +898,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // File handling
     elements.fileBtn.addEventListener('click', handleFileButtonClick);
-    elements.fileInput.addEventListener('change', handleFileSelect);
     elements.filePreview.addEventListener('click', handleAttachmentRemove);
 
     // Priority chips
@@ -969,6 +992,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate settings fields with current config
     elements.urlInput.value = config.apiUrl;
     elements.tokenInput.value = config.accessToken;
+    elements.usernameInput.value = config.username;
+    elements.passwordInput.value = config.password;
+    updateInsecureHint();
     renderTopics(); // Render badges
     updateServerAccessUI(config.apiUrl);
 
@@ -988,6 +1014,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Credentials over http are readable by anyone on the way to the server
+  function updateInsecureHint() {
+    const hasCredentials = [elements.tokenInput, elements.usernameInput, elements.passwordInput]
+      .some(input => input.value !== '');
+    const url = NtfyAPI.normalizeServerUrl(elements.urlInput.value);
+    elements.insecureHint.hidden = !(hasCredentials && /^http:\/\//i.test(url));
+  }
+
   // Marks the settings needed to send and receive while they are empty, and the server while
   // its access token can't be used yet (same conditions as the settings button highlight)
   function updateMissingSettings() {
@@ -998,7 +1032,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Saves right away what is still pending (typed topic, debounced URL or token), so the main
   // view shows the settings as entered
   async function leaveSettings() {
-    addTopicFromInput();
+    if (!addTopicFromInput()) {
+      elements.newTopicInput.focus();
+      return;
+    }
+    debouncedSave.cancel();
     await saveConfig();
     showMainView();
   }
@@ -1008,7 +1046,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Refresh UI to reflect any changes made in settings
     updateUI();
-    applyUrlTitle();
     loadNotifications();
   }
 
@@ -1053,9 +1090,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = elements.messageInput;
     const hadFocus = document.activeElement === input;
     if (open) {
-      elements.messageSlot.appendChild(input);
+      elements.messageSlot.appendChild(elements.composerField);
     } else {
-      elements.composerToggle.after(input);
+      elements.composerToggle.after(elements.composerField);
     }
     input.rows = open ? 3 : 1;
     if (hadFocus) {
@@ -1097,21 +1134,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   function showStatus(message, type) {
-    elements.status.textContent = message;
-    elements.status.className = `status visible ${type}`;
-
-    setTimeout(() => {
-      elements.status.classList.remove('visible');
-    }, 3000);
+    showStatusIn(elements.status, message, type);
   }
 
   function showSettingsStatus(message, type) {
-    elements.settingsStatus.textContent = message;
-    elements.settingsStatus.className = `status visible ${type}`;
+    showStatusIn(elements.settingsStatus, message, type);
+  }
 
-    setTimeout(() => {
-      elements.settingsStatus.classList.remove('visible');
-    }, 3000);
+  // Each message shows for 3 s; a new one restarts the time, so an older timer can't hide it early
+  const statusTimers = new Map();
+  function showStatusIn(element, message, type) {
+    element.textContent = message;
+    element.className = `status visible ${type}`;
+
+    clearTimeout(statusTimers.get(element));
+    statusTimers.set(element, setTimeout(() => {
+      element.classList.remove('visible');
+    }, 3000));
   }
 
   // ==================
@@ -1306,9 +1345,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Adds the typed topic, if any. Also on leaving the field, so a topic typed without Enter isn't lost.
+  // Returns false if the typed name isn't a valid ntfy topic (it stays in the field to be corrected).
   function addTopicFromInput() {
     const value = elements.newTopicInput.value.trim();
-    if (!value) return;
+    if (!value) return true;
+
+    if (!NtfyAPI.TOPIC_PATTERN.test(value)) {
+      showSettingsStatus('Topic names can only use letters, digits, - and _ (up to 64 characters)', 'error');
+      return false;
+    }
 
     // Add topic if not exists
     if (!config.topics.includes(value)) {
@@ -1318,6 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     elements.newTopicInput.value = '';
     updateTopicInputHint(); // Hide hint after clearing
+    return true;
   }
 
   function handleTopicKeydown(e) {
@@ -1357,20 +1403,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==================
 
   function openNtfyUrl() {
-    if (config.apiUrl) {
-      let url = config.apiUrl;
-      const topic = receiveFilter;
+    if (!config.apiUrl) return;
 
-      // Only append topic if it is a valid topic (present in the list of configured topics)
-      if (topic && config.topics.includes(topic)) {
-        if (url.endsWith('/')) {
-          url = url.slice(0, -1);
-        }
-        url += `/${topic}`;
-      }
-
-      chrome.tabs.create({ url: url });
+    let url;
+    try {
+      url = new URL(config.apiUrl);
+    } catch (e) {
+      showStatus('The server URL in the settings is not valid', 'error');
+      return;
     }
+    // Credentials in the server URL are for the extension's requests, not for the tab's address bar and history
+    url.username = '';
+    url.password = '';
+    const topic = receiveFilter;
+    // Only append topic if it is a valid topic (present in the list of configured topics)
+    if (topic && config.topics.includes(topic)) {
+      url.pathname = `${url.pathname.replace(/\/$/, '')}/${encodeURIComponent(topic)}`;
+    }
+
+    chrome.tabs.create({ url: url.href });
   }
 
   // ==================
@@ -1406,13 +1457,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function sendNotification() {
     if (isSending) return;
+    // Set before the first await, so a second trigger meanwhile (a key repeat, a double click) can't send again
+    isSending = true;
+    try {
+      await sendComposedMessage();
+    } finally {
+      isSending = false;
+      elements.sendBtn.disabled = false;
+      renderAttachments();
+    }
+  }
 
+  async function sendComposedMessage() {
     const topic = receiveFilter;
-    const rawMessage = elements.messageInput.value.trim();
+    const message = elements.messageInput.value.trim();
     const title = elements.titleInput.value.trim();
-
-    // With "Include current tab's URL", the URL is in the title (applyUrlTitle)
-    const message = rawMessage;
     const tagsString = tags.join(','); // Use tags array
     const markdown = elements.markdownCheckbox.checked;
 
@@ -1439,20 +1498,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Nothing to send: don't publish an empty message by accident
-    if (!message && !title && filesToSend.length === 0) {
-      elements.messageInput.focus();
-      return;
-    }
-
-    isSending = true;
     elements.sendBtn.disabled = true;
     renderAttachments();
 
     try {
       const apiConfig = {
         apiUrl: config.apiUrl,
-        accessToken: config.accessToken
+        accessToken: config.accessToken,
+        username: config.username,
+        password: config.password
       };
 
       if (filesToSend.length > 0) {
@@ -1515,7 +1569,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await finishSuccessfulSend(filesToSend.length);
       } else {
-        // Send text notification using NtfyAPI
         await NtfyAPI.sendNotification(apiConfig, topic, {
           message: message,
           title: title,
@@ -1531,10 +1584,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus(serverAccessMissing
         ? 'Error: The server blocked the request. Allow access to it in the settings.'
         : `Error: ${error.message}`, 'error');
-    } finally {
-      isSending = false;
-      elements.sendBtn.disabled = false;
-      renderAttachments();
     }
   }
 
@@ -1543,8 +1592,6 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.messageInput.value = '';
     autoSizeMessageInput();
     elements.titleInput.value = '';
-    autoTitle = '';
-    applyUrlTitle();
     updateComposerToggleUI();
 
     if (attachmentCount > 0) {
@@ -1590,25 +1637,40 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // If it has a title, move it to data-tooltip to suppress native tooltip
-      if (target.hasAttribute('title')) {
-        const title = target.getAttribute('title');
-        target.setAttribute('data-tooltip', title);
-        target.removeAttribute('title');
-      }
+      moveTitleToTooltip(target);
 
-      const text = target.getAttribute('data-tooltip');
-      if (!text) return;
+      if (!target.getAttribute('data-tooltip')) return;
 
       activeElement = target;
 
       // Delay showing the tooltip
       tooltipTimeout = setTimeout(() => {
-        // Double-check we are still active on this element
+        // Double-check we are still active on this element; the text as it is now
         if (activeElement === target) {
-          showTooltip(target, text);
+          showTooltip(target, target.getAttribute('data-tooltip'));
         }
       }, 1000); // 1000ms delay
     });
+
+    function moveTitleToTooltip(element) {
+      if (element.hasAttribute('title')) {
+        element.setAttribute('data-tooltip', element.getAttribute('title'));
+        element.removeAttribute('title');
+      }
+    }
+
+    // A title set while the element is hovered (e.g. "Click again to delete") would bring up the
+    // native tooltip next to this one, which would keep the old text: move it over, and update
+    // the tooltip if it is showing
+    new MutationObserver(mutations => {
+      mutations.forEach(({ target }) => {
+        if (!target.hasAttribute('title')) return;
+        moveTitleToTooltip(target);
+        if (target === activeElement && tooltip.classList.contains('visible')) {
+          showTooltip(target, target.getAttribute('data-tooltip'));
+        }
+      });
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['title'] });
 
     document.addEventListener('mouseout', (e) => {
       if (activeElement && (e.target === activeElement || e.target.closest('[data-tooltip]') === activeElement)) {
@@ -1668,7 +1730,8 @@ document.addEventListener('DOMContentLoaded', () => {
       rightCtrlDown = true;
     }
 
-    if (e.key === 'Enter' && rightCtrlDown) {
+    // defaultPrevented: the message field already handled this Enter (and sent)
+    if (e.key === 'Enter' && rightCtrlDown && !e.defaultPrevented) {
       // Check if send button is visible and enabled
       // offsetParent is null if element or any parent is hidden (display: none)
       if (elements.sendBtn.offsetParent !== null && !elements.sendBtn.disabled) {
@@ -1714,8 +1777,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const localData = await getFromStorageLocal(['receivedNotifications', THUMBNAIL_CACHE_KEY]);
+      // Messages of removed topics leave the history too (background), but may still be there
       const allNotifications = (localData.receivedNotifications || [])
-        .filter(notification => !deletedMessageIds.includes(notification.id));
+        .filter(notification => config.topics.includes(notification.topic)
+          && !deletedMessageIds.includes(notification.id));
       thumbnailCache = localData[THUMBNAIL_CACHE_KEY] || {};
       pruneThumbnails(allNotifications);
 
@@ -1920,7 +1985,8 @@ document.addEventListener('DOMContentLoaded', () => {
         receiveFilter = topic;
         setDeleteAllArmed(false);
         saveToStorageLocal({ receiveTopicFilter: topic }).catch(() => {});
-        loadNotifications();
+        // Another topic's list starts at the top, not at the previous list's scroll position
+        loadNotifications().then(() => { elements.notificationsList.scrollTop = 0; });
       });
       return btn;
     }));
@@ -1971,8 +2037,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const thumbnailJobs = new Map(); // message id -> Promise<string|null>
   let thumbnailCacheQueue = Promise.resolve();
 
+  // Only files uploaded to the ntfy server get a preview: the server reports their size (and type and
+  // expiry). An attachment can also be a link to a file anywhere (X-Attach), which has none of those;
+  // loading it by itself would let anyone who can publish to the topic make the popup request any
+  // host, like an image in Markdown would (not loaded either), and of any size.
   function isImageAttachment(attachment) {
-    if (!attachment || !NtfyAPI.isHttpUrl(attachment.url)) {
+    if (!attachment || !NtfyAPI.isHttpUrl(attachment.url) || typeof attachment.size !== 'number') {
       return false;
     }
     if (attachment.type) {
@@ -2044,7 +2114,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function createThumbnail(attachment) {
-    if (attachment.size && attachment.size > THUMBNAIL_MAX_SOURCE_BYTES) {
+    if (attachment.size > THUMBNAIL_MAX_SOURCE_BYTES) {
       throw new Error('Image too large');
     }
 
@@ -2160,7 +2230,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnElement.remove();
     try {
       readMessageIds = await updateStoredIds('readMessageIds',
-        ids => ids.includes(messageId) ? ids : [...ids, messageId]);
+        ids => NtfyAPI.appendIds(ids, [messageId]));
     } catch (error) {
       console.error('Error saving readMessageIds:', error);
       showStatus('Failed to mark as read', 'error');
@@ -2203,7 +2273,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       deletedMessageIds = await updateStoredIds('deletedMessageIds',
-        ids => ids.includes(messageId) ? ids : [...ids, messageId]);
+        ids => NtfyAPI.appendIds(ids, [messageId]));
       readMessageIds = await updateStoredIds('readMessageIds',
         ids => ids.filter(id => id !== messageId));
     } catch (error) {
@@ -2306,7 +2376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const visibleIds = currentNotifications.map(notification => notification.id);
     try {
       readMessageIds = await updateStoredIds('readMessageIds',
-        ids => [...ids, ...visibleIds.filter(id => !ids.includes(id))]);
+        ids => NtfyAPI.appendIds(ids, visibleIds));
       showStatus('All marked as read', 'success');
     } catch (error) {
       console.error('Error saving readMessageIds:', error);
@@ -2339,7 +2409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const visibleIds = currentNotifications.map(notification => notification.id);
     try {
       deletedMessageIds = await updateStoredIds('deletedMessageIds',
-        ids => [...ids, ...visibleIds.filter(id => !ids.includes(id))]);
+        ids => NtfyAPI.appendIds(ids, visibleIds));
       readMessageIds = await updateStoredIds('readMessageIds',
         ids => ids.filter(id => !visibleIds.includes(id)));
       showStatus('All notifications deleted', 'success');

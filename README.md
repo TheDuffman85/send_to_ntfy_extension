@@ -9,15 +9,15 @@ A browser extension to send notifications to, and receive them from, [ntfy.sh](h
 
 ## Features
 
-- **Context Menu**: Right-click to send the current page, selected text, an image, or a link directly to ntfy.
+- **Context Menu**: Right-click to send the current page, selected text, an image, or a link directly to ntfy. Sending an image asks for access to its site; access given this way is removed after 30 days without sending from that site.
 - **File Upload**: Select multiple files and send them as separate notifications or one ZIP to your ntfy topics.
 - **Quick Sharing**: Send the current page URL or custom text to your ntfy topics, with priority, tags, and optional Markdown formatting.
-- **Receive Notifications**: Once switched on in the settings, messages from your topics arrive live (WebSocket) as desktop notifications, with an unread count on the icon. Messages published while the browser was closed are fetched when it starts. Messages you send from the extension are marked as read and don't show a desktop notification.
-- **One View for Sending and Receiving**: A topic list with unread counts next to the messages of all topics or of the selected one, with mark-as-read and delete actions (stored locally). Links in messages are clickable, message text can be copied, image attachments show a preview, and attachments can be downloaded. With a topic selected, a message bar at the bottom sends to it, like in the ntfy web app; its arrow button opens the title, Markdown, priority, tag, and attachment options.
+- **Receive Notifications**: Once switched on in the settings, messages from your topics arrive live (WebSocket) as desktop notifications, with an unread count on the icon. Messages published while the browser was closed are fetched when it starts (more than three show as one summary notification). Clicking a notification marks its message as read and opens its click URL, if it has one, or the popup. Messages you send from the extension are marked as read and don't show a desktop notification.
+- **One View for Sending and Receiving**: A topic list with unread counts next to the messages of all topics or of the selected one, with mark-as-read and delete actions (stored locally). Links in messages are clickable, message text can be copied, image attachments uploaded to the server show a preview (links to files elsewhere aren't loaded by themselves), and attachments can be downloaded. With a topic selected, a message bar at the bottom sends to it, like in the ntfy web app; its arrow button opens the title, Markdown, priority, tag, and attachment options.
 - **Open in ntfy**: Open the selected topic in the ntfy web app.
 - **Keyboard Shortcuts**: `Enter` sends from the message bar (`Shift + Enter` for a new line). With the options open, `Enter` starts a new line and `Ctrl + Enter` sends. `Right Ctrl + Enter` sends from anywhere.
 - **Custom Configuration**: Support for self-hosted ntfy servers.
-- **Authentication**: Optional support for token-based authentication.
+- **Authentication**: Optional access token, or username and password; both are stored on the device only.
 - **Privacy First**: No tracking; received messages and their read state are stored locally.
 - **Modern UI**: Clean interface with light, dark, and automatic themes.
 - **Rate-Limit Friendly**: When the server answers with HTTP 429, background requests pause for two minutes, so sending keeps working.
@@ -40,19 +40,18 @@ A browser extension to send notifications to, and receive them from, [ntfy.sh](h
 
 ## Configuration & Usage
 
-Open the settings with the gear icon. They are grouped into Server, Topics, Receiving, Sending, and Appearance, and changes are saved automatically.
+Open the settings with the gear icon. They are grouped into Server, Topics, Receiving, and Appearance, and changes are saved automatically.
 
 1. **Server URL**: The base URL of your ntfy server, e.g. `https://ntfy.sh` or your self-hosted instance. If the server's CORS headers block the extension's requests (e.g. a reverse proxy in front of ntfy), the settings show **Allow access to this server** after a blocked request: it gives the extension permission for the server's site.
-2. **Access Token**: Optional, for private topics or servers that require authentication. It is stored locally and is not copied to other browsers by browser sync.
-3. **Topics**: Add the topics to send to. The extension receives from the topics your credentials can read; a topic you can only send to is used for sending only.
+2. **Access Token** or **Username and password**: Optional, for private topics or servers that require authentication. They are stored locally and are not copied to other browsers by browser sync (credentials typed into the server URL, as in `https://user:password@host`, are moved to these fields). With an `http://` server they would be sent unencrypted, which the settings point out.
+3. **Topics**: Add the topics to send to. On a public server like ntfy.sh, a topic without access control can be read by anyone who knows or guesses its name, so choose a name that is hard to guess, or reserve the topic, before sending page URLs or selected text to it. The extension receives from the topics your credentials can read; a topic you can only send to is used for sending only.
 4. **Receive messages**: Off by default, so the extension only sends until you switch it on. Off, it keeps no live connection and doesn't poll the server, shows no desktop notifications or unread count, and the main view has no message list or **All topics** entry; the send options stay open below the selected topic.
-5. **Include current tab's URL**: Puts the page URL in the message title.
-6. **Theme**: Light, dark, or automatic (follows the system).
-7. **Popup size**: Small, medium (the default), or large; smaller sizes also use smaller text. Medium and Large use the full height browsers allow for an extension popup (600 pixels), and Large also the full width (800 pixels); browsers don't let you resize a popup by dragging it.
+5. **Theme**: Light, dark, or automatic (follows the system).
+6. **Popup size**: Small, medium (the default), or large; smaller sizes also use smaller text. Medium and Large use the full height browsers allow for an extension popup (600 pixels), and Large also the full width (800 pixels); browsers don't let you resize a popup by dragging it.
 
 ### Sending
 
-- **Message bar**: Select a topic to send to it from the bar at the bottom. The arrow button next to it opens the title, **Format as Markdown**, priority, tags, and attachments; the message field then moves below the title.
+- **Message bar**: Select a topic to send to it from the bar at the bottom. The arrow button next to it opens the title, **Format as Markdown**, priority, tags, and attachments; the message field then moves below the title. The link button next to the message field inserts the current tab's URL. A message needs text or an attachment; a title alone isn't sent.
 - **Priority and Tags**: The last used priority and tags are remembered for the next message.
 - **Attachments**: When multiple files are attached, the extension sends them as separate notifications by default. Enable **Send files as one ZIP** below the attachment list to send all of them in one ZIP attachment instead. The preference is remembered and can be switched at any time.
 - **Send another**: Keeps the extension open after sending, for the next message.
