@@ -13,7 +13,7 @@ A browser extension to send notifications to, and receive them from, [ntfy.sh](h
 - **File Upload**: Select multiple files and send them as separate notifications or one ZIP to your ntfy topics.
 - **Quick Sharing**: Send the current page URL or custom text to your ntfy topics, with priority, tags, and optional Markdown formatting.
 - **Receive Notifications**: Once switched on in the settings, messages from your topics arrive live (WebSocket) as desktop notifications, shown like in the popup: emoji tags in front of the title, the other tags below the message, Markdown as plain text, and a preview of an uploaded image (large in Chrome and Edge, as the icon in Firefox), with an unread count on the icon. Messages published while the browser was closed are fetched when it starts (more than three show as one summary notification). Clicking a notification marks its message as read and opens its click URL, if it has one, or the popup. Messages you send from the extension are marked as read and don't show a desktop notification.
-- **One View for Sending and Receiving**: A topic list with unread counts next to the messages of all topics or of the selected one, with mark-as-read and delete actions (stored locally). Tags that name an emoji (like `warning`) show as that emoji in front of the title or message, like in the ntfy web app. Links in messages are clickable, message text can be copied, image attachments uploaded to the server show a preview (links to files elsewhere aren't loaded by themselves), and attachments can be downloaded. With a topic selected, a message bar at the bottom sends to it, like in the ntfy web app; its arrow button opens the title, Markdown, priority, tag, and attachment options.
+- **One View for Sending and Receiving**: A topic list with unread counts next to the messages of all topics or of the selected one, with mark-as-read and delete actions (stored locally); a green dot marks unread messages, like in the ntfy web app. Tags that name an emoji (like `warning`) show as that emoji in front of the title or message, like in the ntfy web app. Links in messages are clickable, message text can be copied, image attachments uploaded to the server show a preview (links to files elsewhere aren't loaded by themselves), and attachments can be downloaded. With a topic selected, a message bar at the bottom sends to it, like in the ntfy web app; its arrow button opens the title, Markdown, priority, tag, and attachment options.
 - **Open in ntfy**: Open the selected topic in the ntfy web app.
 - **Keyboard Shortcuts**: `Enter` sends from the message bar (`Shift + Enter` for a new line). With the options open, `Enter` starts a new line and `Ctrl + Enter` sends. `Right Ctrl + Enter` sends from anywhere.
 - **Custom Configuration**: Support for self-hosted ntfy servers.
@@ -52,7 +52,7 @@ Open the settings with the gear icon. They are grouped into Server, Topics, Rece
 ### Sending
 
 - **Message bar**: Select a topic to send to it from the bar at the bottom. The arrow button next to it opens the title, **Format as Markdown**, priority, tags (with an emoji picker, like ntfy's), and attachments; the message field then moves below the title. The link button next to the message field inserts the current tab's URL. A message needs text or an attachment; a title alone isn't sent.
-- **Priority and Tags**: The last used priority and tags are remembered for the next message.
+- **Priority and Tags**: The last used priority is remembered for the next message. Tags carry over to the next message only while **Send another** is checked; otherwise they are cleared after sending. Type a tag, or an emoji name like `warning` to show that emoji in front of the title, and press `Enter`; the emoji button in the tags field picks one from a list.
 - **Attachments**: When multiple files are attached, the extension sends them as separate notifications by default. Enable **Send files as one ZIP** below the attachment list to send all of them in one ZIP attachment instead. The preference is remembered and can be switched at any time.
 - **Send another**: Keeps the extension open after sending, for the next message.
 
@@ -79,7 +79,7 @@ The build output (`send-to-ntfy-chrome.zip`, `send-to-ntfy-firefox.xpi`) is plac
     <th>Sending, with the options open</th>
   </tr>
   <tr>
-    <td valign="top"><img src="screenshots/receive.png" width="400" alt="All topics with the topic list, unread counts, and an image preview"></td>
+    <td valign="top"><img src="screenshots/receive.png" width="400" alt="All topics with the topic list, unread counts, emoji tags, and an image preview"></td>
     <td valign="top"><img src="screenshots/send.png" width="400" alt="Message bar of a topic with title, priority, tags, and two attached files"></td>
   </tr>
   <tr>
@@ -91,11 +91,11 @@ The build output (`send-to-ntfy-chrome.zip`, `send-to-ntfy-firefox.xpi`) is plac
     <td valign="top"><img src="screenshots/receive-dark.png" width="400" alt="All topics in dark mode"></td>
   </tr>
   <tr>
+    <th>Emoji picker</th>
     <th>Settings</th>
-    <th></th>
   </tr>
   <tr>
+    <td valign="top"><img src="screenshots/emoji-picker.png" width="400" alt="The emoji picker next to the tags field"></td>
     <td valign="top"><img src="screenshots/settings.png" width="400" alt="Settings"></td>
-    <td></td>
   </tr>
 </table>
