@@ -319,10 +319,6 @@ body {
     font-family: inherit;
 }
 
-.form-select {
-    display: none;
-}
-
 .form-hint {
     font-size: 12px;
     color: var(--text-secondary);
@@ -330,92 +326,6 @@ body {
     padding-bottom: 6px;
     font-style: italic;
     opacity: 0.8;
-}
-
-/* ========================================
-   Custom Dropdown
-   ======================================== */
-
-.custom-dropdown {
-    position: relative;
-    width: 100%;
-}
-
-.custom-dropdown-selected {
-    cursor: pointer;
-    padding: 4px 28px 10px 0;
-    border: none;
-    border-bottom: 2px solid var(--border-color);
-    margin-bottom: -1px;
-    background-color: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    color: var(--text-primary);
-    font-size: 15px;
-}
-
-.custom-dropdown-selected:hover {
-    border-bottom-color: var(--border-focus);
-}
-
-.custom-dropdown.open .custom-dropdown-selected {
-    border-bottom-color: var(--border-focus);
-}
-
-.custom-dropdown-arrow {
-    position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
-    pointer-events: none;
-    transition: transform 0.2s;
-}
-
-.custom-dropdown.open .custom-dropdown-arrow {
-    transform: translateY(-50%) rotate(180deg);
-}
-
-.custom-dropdown-arrow svg {
-    width: 12px;
-    height: 12px;
-    fill: var(--text-secondary);
-}
-
-.custom-dropdown-options {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-top: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
-    max-height: 200px;
-    overflow-y: auto;
-    display: none;
-}
-
-.custom-dropdown.open .custom-dropdown-options {
-    display: block;
-}
-
-.custom-dropdown-option {
-    padding: 10px 12px;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--text-primary);
-    transition: background-color 0.15s;
-}
-
-.custom-dropdown-option:hover {
-    background-color: rgba(51, 133, 116, 0.1);
-}
-
-.custom-dropdown-option.selected {
-    background-color: rgba(51, 133, 116, 0.15);
-    color: var(--primary);
 }
 
 /* ========================================
@@ -551,19 +461,12 @@ body {
     flex-direction: column;
     gap: 6px;
     margin-top: 8px;
-    /* Reserve room for the ZIP toggle, advanced options, and send footer. */
     max-height: 100px;
     overflow-y: auto;
 }
 
 .file-preview.visible {
     display: flex;
-}
-
-/* The action popup cannot exceed 600px. Collapse file rows while the larger
-   advanced section is open; the attachment count remains on the button. */
-.main-content.advanced-open.has-multiple-attachments .file-preview.visible {
-    display: none;
 }
 
 .file-preview-item {
@@ -762,68 +665,24 @@ body {
    Send Footer & Buttons
    ======================================== */
 
-.send-footer {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 10px;
-    margin-left: -16px;
-    margin-right: -16px;
-    padding: 8px 16px 12px;
-    background-color: var(--bg-main);
-}
-
-.send-another-group {
+.composer-checkbox {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.send-another-group input[type="checkbox"] {
+.composer-checkbox input[type="checkbox"] {
     width: 14px;
     height: 14px;
     accent-color: var(--primary);
     cursor: pointer;
 }
 
-.send-another-group label {
+.composer-checkbox label {
     font-size: 13px;
     color: var(--text-secondary);
     cursor: pointer;
 }
-
-/* Send Button - Text style like ntfy.sh */
-.send-btn {
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--primary);
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.send-btn:hover {
-    background-color: rgba(51, 133, 116, 0.1);
-}
-
-.send-btn:active {
-    background-color: rgba(51, 133, 116, 0.2);
-}
-
-.send-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-
 
 /* ========================================
    Status Message
@@ -854,43 +713,6 @@ body {
 .status.warning {
     background-color: rgba(255, 152, 0, 0.15);
     color: #f57c00;
-}
-
-/* ========================================
-   Advanced Options
-   ======================================== */
-
-.advanced-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    user-select: none;
-    margin-bottom: 8px;
-    margin-top: 12px;
-}
-
-.advanced-toggle:hover {
-    color: var(--primary);
-}
-
-.advanced-toggle .arrow {
-    transition: transform 0.2s;
-}
-
-.advanced-toggle.open .arrow {
-    transform: rotate(90deg);
-}
-
-.advanced-options {
-    display: none;
-}
-
-.advanced-options.visible {
-    display: block;
 }
 
 /* ========================================
@@ -1345,6 +1167,20 @@ body.filepicker-page {
     background-color: rgba(244, 67, 54, 0.1);
 }
 
+.notification-action-btn.copy-btn:hover {
+    color: var(--primary-light);
+    background-color: rgba(51, 133, 116, 0.1);
+}
+
+.notification-action-btn.copy-btn.copied {
+    width: auto;
+    padding: 0 8px;
+    border-radius: 13px;
+    font-size: 12px;
+    color: #fff;
+    background-color: var(--primary);
+}
+
 .notification-action-btn.download-btn:hover {
     color: #2196f3;
     background-color: rgba(33, 150, 243, 0.1);
@@ -1363,57 +1199,6 @@ body.filepicker-page {
 .notification-action-btn.delete-btn.confirming:hover {
     color: #fff;
     background-color: #b71c1c;
-}
-
-/* ========================================
-   Tab Bar & Tab Buttons
-   ======================================== */
-
-.tab-bar {
-    display: flex;
-    width: 100%;
-    border-bottom: 1px solid var(--border-color);
-    background-color: var(--bg-main);
-}
-
-.tab-btn {
-    flex: 1;
-    background: none;
-    border: none;
-    padding: 10px 0;
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: center;
-    border-bottom: 2px solid transparent;
-}
-
-.tab-btn:hover {
-    color: var(--text-primary);
-    background-color: rgba(0, 0, 0, 0.02);
-}
-body[data-theme="dark"] .tab-btn:hover {
-    background-color: rgba(255, 255, 255, 0.02);
-}
-
-.tab-btn.active {
-    color: var(--primary-light);
-    font-weight: 600;
-    border-bottom-color: var(--primary-light);
-}
-
-/* ========================================
-   Tab Content
-   ======================================== */
-
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
 }
 
 /* ========================================
@@ -1464,18 +1249,27 @@ body[data-theme="dark"] .tab-btn:hover {
 }
 
 /* ========================================
-   Receive Tab: Topic List
+   Main View: Topic List, Messages, Composer
    ======================================== */
 
+/* Fixed height, so the composer stays at the bottom and the message list takes the rest */
 .receive-layout {
     display: flex;
     gap: 10px;
-    align-items: flex-start;
+    height: 500px;
 }
 
 .receive-layout .notifications-section {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.receive-layout .notifications-list {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
 }
 
 .topic-sidebar {
@@ -1485,7 +1279,6 @@ body[data-theme="dark"] .tab-btn:hover {
     gap: 2px;
     padding-right: 8px;
     border-right: 1px solid var(--border-color);
-    max-height: 420px;
     overflow-y: auto;
 }
 
@@ -1535,57 +1328,7 @@ body[data-theme="dark"] .tab-btn:hover {
     text-align: center;
 }
 
-/* Opened in a tab: the lists use the tab's height */
-body.page-mode .notifications-list,
-body.page-mode .topic-sidebar {
-    max-height: calc(100vh - 170px);
-}
-
-/* Narrow tab: topics in a row above the messages */
-@media (max-width: 479px) {
-    body.page-mode .receive-layout {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    body.page-mode .topic-sidebar {
-        flex: none;
-        flex-direction: row;
-        overflow-x: auto;
-        padding: 0 0 6px;
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    body.page-mode .topic-filter-btn {
-        width: auto;
-        flex: none;
-    }
-}
-
-/* Title label with the "Use tab URL" button */
-.form-label-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.link-btn {
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--primary-light);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.link-btn:hover {
-    text-decoration: underline;
-}
-
-/* Heading and bulk actions of the Receive tab on one centred line */
+/* Heading and bulk actions on one centred line */
 .notifications-section .control-btn {
     display: inline-flex;
     align-items: center;
@@ -1593,6 +1336,154 @@ body.page-mode .topic-sidebar {
     line-height: 1.3;
 }
 
-#receive-status {
-    margin: 0 0 8px;
+#status {
+    margin-top: 8px;
+}
+
+/* ========================================
+   Composer (like the ntfy web app's message bar)
+   ======================================== */
+
+.composer {
+    flex: none;
+    margin-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+.composer[hidden] {
+    display: none;
+}
+
+.composer-options {
+    display: none;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 10px 4px 4px 0;
+}
+
+.composer.options-open .composer-options {
+    display: block;
+}
+
+/* Open options take the messages' place and the full height */
+.notifications-section:has(.composer.options-open:not([hidden])) .notifications-list,
+.notifications-section:has(.composer.options-open:not([hidden])) .notifications-control-bar {
+    display: none;
+}
+
+.composer.options-open:not([hidden]) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.composer.options-open .composer-options {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+}
+
+.composer-options .file-section {
+    margin-top: 4px;
+}
+
+.composer-options .composer-checkbox {
+    margin-top: 6px;
+}
+
+.composer-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding-top: 8px;
+}
+
+.composer-input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 0;
+    font: inherit;
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--text-primary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--border-color);
+    border-radius: 0;
+    outline: none;
+    resize: none;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    transition: border-color 0.2s;
+}
+
+#message-slot .composer-input {
+    display: block;
+    width: 100%;
+}
+
+.composer-input:hover,
+.composer-input:focus {
+    border-bottom-color: var(--border-focus);
+}
+
+.composer-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.composer-btn {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.composer-btn svg {
+    fill: currentColor;
+    transition: transform 0.2s;
+}
+
+.composer-btn:hover:not(:disabled) {
+    background-color: rgba(51, 133, 116, 0.1);
+    color: var(--text-primary);
+}
+
+.composer-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.composer-btn.send-btn {
+    margin-left: auto;
+    color: var(--primary-light);
+}
+
+.composer-btn.send-btn:hover:not(:disabled) {
+    color: var(--primary-light);
+}
+
+.composer.options-open #composer-toggle svg {
+    transform: rotate(180deg);
+}
+
+/* The closed options hold a title or files */
+.composer:not(.options-open) #composer-toggle.has-extras::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--primary-light);
 }

@@ -7,20 +7,9 @@
   <link rel="stylesheet" href="styles.css">
   <style>
     /* Popup-specific layout */
-    /* Same width on both tabs, wide enough for the Receive tab's topic list */
+    /* Wide enough for the topic list next to the messages */
     body {
       width: 600px;
-    }
-
-    body.receive-active:not(.page-mode) .notifications-list {
-      max-height: 400px;
-    }
-
-    /* Opened in a browser tab: follow the tab's width, up to a readable maximum */
-    body.page-mode {
-      width: auto;
-      max-width: 1100px;
-      margin: 0 auto;
     }
 
     .header {
@@ -33,7 +22,7 @@
   </style>
 </head>
 
-<body data-theme="auto" class="receive-active">
+<body data-theme="auto">
   <!-- Header -->
   <div class="header">
     <div class="header-left">
@@ -46,12 +35,6 @@
       <button class="back-btn" id="back-btn" title="Back">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
           <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-        </svg>
-      </button>
-      <button class="icon-btn" id="popout-btn" title="Open in a tab">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-          <path
-            d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h10v4h8v10z" />
         </svg>
       </button>
       <button class="icon-btn" id="open-url-btn" title="Open in ntfy">
@@ -69,132 +52,108 @@
     </div>
   </div>
 
-  <!-- Main View -->
-  <!-- Main View -->
+  <!-- Main View: topic list, the selected topic's messages, and the composer below them -->
   <div class="view active" id="main-view">
-    <!-- Tab Bar -->
-    <div class="tab-bar">
-      <button class="tab-btn" data-tab="send">Send</button>
-      <button class="tab-btn active" data-tab="receive">Receive</button>
-    </div>
-
-    <!-- Tab Contents -->
-    <!-- Send Tab -->
-    <div class="tab-content" id="tab-content-send">
-      <div class="main-content" id="main-content">
-        <!-- Topic Selection -->
-        <div class="form-group">
-          <label class="form-label">Topic</label>
-          <div class="custom-dropdown" id="topic-dropdown">
-            <div class="custom-dropdown-selected" id="topic-dropdown-selected">
-              <span id="topic-dropdown-text">Select topic...</span>
-            </div>
-            <div class="custom-dropdown-arrow">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
-                <path d="M2 4l4 4 4-4" />
-              </svg>
-            </div>
-            <div class="custom-dropdown-options" id="topic-dropdown-options"></div>
-          </div>
-          <select class="form-select" id="topic-select"></select>
-        </div>
-
-        <!-- Title (Optional) -->
-        <div class="form-group">
-          <div class="form-label-row">
-            <label class="form-label" for="title-input">Title</label>
-            <button class="link-btn" id="tab-url-btn" style="display: none;"
-              title="Use the URL of the web page tab you were on last">🔗 Use tab URL</button>
-          </div>
-          <input type="text" class="form-input" id="title-input">
-        </div>
-
-        <!-- Message -->
-        <div class="form-group">
-          <label class="form-label" for="message-input">Message</label>
-        </div>
-        <textarea class="form-textarea" id="message-input" rows="3"></textarea>
-
-        <!-- File Attachment -->
-        <div class="file-section">
-          <div class="file-input-wrapper">
-            <input type="file" class="file-input" id="file-input" multiple>
-            <button class="file-btn" id="file-btn">
-              📎 Attach files
-            </button>
-          </div>
-          <div class="file-preview" id="file-preview" aria-live="polite"></div>
-          <label class="zip-toggle" id="zip-toggle">
-            <span class="zip-toggle-copy">
-              <span class="zip-toggle-title">Send files as one ZIP</span>
-              <span class="zip-toggle-hint">One ntfy message containing every attached file.</span>
-            </span>
-            <input type="checkbox" id="zip-checkbox" aria-label="Send files as one ZIP">
-            <span class="zip-switch" aria-hidden="true"><span></span></span>
-          </label>
-        </div>
-
-        <!-- Advanced Options Toggle -->
-        <div class="advanced-toggle" id="advanced-toggle">
-          <span class="arrow">▶</span>
-          Advanced options
-        </div>
-
-        <!-- Advanced Options -->
-        <div class="advanced-options" id="advanced-options">
-          <!-- Priority -->
-          <div class="form-group">
-            <label class="form-label">Priority</label>
-            <div class="chips" id="priority-chips">
-              <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
-              <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
-              <button class="chip active" data-priority="3">Default</button>
-              <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
-              <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
-            </div>
-          </div>
-
-          <!-- Tags -->
-          <div class="form-group">
-            <label class="form-label">Tags</label>
-            <div class="tags-container" id="tags-container">
-              <input type="text" class="tag-input-field" id="new-tag-input">
-              <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
-            </div>
+    <div class="main-content receive-layout">
+      <!-- Topic list: All topics, then each configured topic -->
+      <nav class="topic-sidebar" id="topic-sidebar" aria-label="Topics"></nav>
+      <!-- Notifications Section -->
+      <div class="notifications-section" id="notifications-section">
+        <div class="section-header">
+          <span class="section-title" id="notifications-title">Notifications</span>
+          <div class="notifications-control-bar" id="notifications-control-bar" style="visibility: hidden;">
+            <button class="control-btn" id="mark-all-read-btn" title="Mark all read">✓ Mark all read</button>
+            <button class="control-btn" id="delete-all-btn" title="Delete all">🗑 Delete all</button>
           </div>
         </div>
-
-        <!-- Send Footer -->
-        <div class="send-footer">
-          <div class="send-another-group">
-            <input type="checkbox" id="send-another-checkbox">
-            <label for="send-another-checkbox">Send another</label>
-          </div>
-          <button class="send-btn" id="send-btn">Send</button>
+        <div class="notifications-list" id="notifications-list">
+          <div class="notifications-loading">Loading notifications...</div>
         </div>
 
         <!-- Status Message -->
         <div class="status" id="status"></div>
-      </div>
-    </div>
 
-    <!-- Receive Tab -->
-    <div class="tab-content active" id="tab-content-receive">
-      <div class="main-content receive-layout">
-        <!-- Topic list: All topics, then each configured topic -->
-        <nav class="topic-sidebar" id="topic-sidebar" aria-label="Topics"></nav>
-        <!-- Notifications Section -->
-        <div class="notifications-section" id="notifications-section">
-          <div class="section-header">
-            <span class="section-title">Notifications</span>
-            <div class="notifications-control-bar" id="notifications-control-bar" style="visibility: hidden;">
-              <button class="control-btn" id="mark-all-read-btn" title="Mark all read">✓ Mark all read</button>
-              <button class="control-btn" id="delete-all-btn" title="Delete all">🗑 Delete all</button>
+        <!-- Composer: sends to the selected topic, hidden on All topics -->
+        <div class="composer" id="composer" hidden>
+          <!-- Further send options, opened with the arrow button -->
+          <div class="composer-options" id="composer-options">
+            <!-- Title (Optional) -->
+            <div class="form-group">
+              <label class="form-label" for="title-input">Title</label>
+              <input type="text" class="form-input" id="title-input">
+            </div>
+
+            <!-- Message: the message bar's field moves here while the options are open -->
+            <div class="form-group">
+              <label class="form-label" for="message-input">Message</label>
+              <div id="message-slot"></div>
+              <div class="composer-checkbox markdown-option">
+                <input type="checkbox" id="markdown-checkbox">
+                <label for="markdown-checkbox">Format as Markdown</label>
+              </div>
+            </div>
+
+            <!-- Priority -->
+            <div class="form-group">
+              <label class="form-label">Priority</label>
+              <div class="chips" id="priority-chips">
+                <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
+                <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
+                <button class="chip active" data-priority="3">Default</button>
+                <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
+                <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
+              </div>
+            </div>
+
+            <!-- Tags -->
+            <div class="form-group">
+              <label class="form-label">Tags</label>
+              <div class="tags-container" id="tags-container">
+                <input type="text" class="tag-input-field" id="new-tag-input">
+                <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
+              </div>
+            </div>
+
+            <!-- File Attachment -->
+            <div class="file-section">
+              <div class="file-input-wrapper">
+                <input type="file" class="file-input" id="file-input" multiple>
+                <button class="file-btn" id="file-btn">
+                  📎 Attach files
+                </button>
+              </div>
+              <div class="file-preview" id="file-preview" aria-live="polite"></div>
+              <label class="zip-toggle" id="zip-toggle">
+                <span class="zip-toggle-copy">
+                  <span class="zip-toggle-title">Send files as one ZIP</span>
+                  <span class="zip-toggle-hint">One ntfy message containing every attached file.</span>
+                </span>
+                <input type="checkbox" id="zip-checkbox" aria-label="Send files as one ZIP">
+                <span class="zip-switch" aria-hidden="true"><span></span></span>
+              </label>
+            </div>
+
+            <div class="composer-checkbox">
+              <input type="checkbox" id="send-another-checkbox">
+              <label for="send-another-checkbox">Send another (keep the popup open after sending)</label>
             </div>
           </div>
-          <div class="status" id="receive-status"></div>
-          <div class="notifications-list" id="notifications-list">
-            <div class="notifications-loading">Loading notifications...</div>
+
+          <!-- Message bar, like the ntfy web app's -->
+          <div class="composer-bar">
+            <button class="composer-btn" id="composer-toggle" title="More options" aria-expanded="false"
+              aria-controls="composer-options">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                <path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
+              </svg>
+            </button>
+            <textarea class="composer-input" id="message-input" rows="1" placeholder="Type a message here"
+              aria-label="Message"></textarea>
+            <button class="composer-btn send-btn" id="send-btn" title="Send">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -234,15 +193,6 @@
           <label for="include-url-checkbox">Include current tab's URL</label>
         </div>
         <p class="form-hint">Put the active tab's URL in the title</p>
-      </div>
-
-      <div class="form-group">
-        <div class="form-label">Default Tab</div>
-        <div class="chips" id="default-tab-chips">
-          <button class="chip" data-default-tab="send">📤 Send</button>
-          <button class="chip active" data-default-tab="receive">📥 Receive</button>
-        </div>
-        <p class="form-hint">Tab shown when the extension opens</p>
       </div>
 
       <div class="form-group">

@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const elements = {
     // Views
     mainView: document.getElementById('main-view'),
-    mainContent: document.getElementById('main-content'), // Send tab form
     settingsView: document.getElementById('settings-view'),
 
     // Header
@@ -11,16 +10,13 @@ document.addEventListener('DOMContentLoaded', () => {
     headerText: document.getElementById('header-text'),
     openUrlBtn: document.getElementById('open-url-btn'),
     settingsBtn: document.getElementById('settings-btn'),
-    popoutBtn: document.getElementById('popout-btn'),
 
-    // Main form
-    topicSelect: document.getElementById('topic-select'),
-    topicDropdown: document.getElementById('topic-dropdown'),
-    topicDropdownSelected: document.getElementById('topic-dropdown-selected'),
-    topicDropdownText: document.getElementById('topic-dropdown-text'),
-    topicDropdownOptions: document.getElementById('topic-dropdown-options'),
+    // Composer
+    composer: document.getElementById('composer'),
+    composerToggle: document.getElementById('composer-toggle'),
+    composerOptions: document.getElementById('composer-options'),
+    messageSlot: document.getElementById('message-slot'),
     titleInput: document.getElementById('title-input'),
-    tabUrlBtn: document.getElementById('tab-url-btn'),
     messageInput: document.getElementById('message-input'),
     tagsContainer: document.getElementById('tags-container'),
     newTagInput: document.getElementById('new-tag-input'),
@@ -37,19 +33,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Priority & Theme chips
     priorityChips: document.getElementById('priority-chips'),
     themeChips: document.getElementById('theme-chips'),
-    defaultTabChips: document.getElementById('default-tab-chips'),
-
-    // Advanced options
-    advancedToggle: document.getElementById('advanced-toggle'),
-    advancedOptions: document.getElementById('advanced-options'),
 
     // Actions
     sendBtn: document.getElementById('send-btn'),
     sendAnotherCheckbox: document.getElementById('send-another-checkbox'),
+    markdownCheckbox: document.getElementById('markdown-checkbox'),
 
     // Status
     status: document.getElementById('status'),
-    receiveStatus: document.getElementById('receive-status'),
     settingsStatus: document.getElementById('settings-status'),
 
     // Settings inputs
@@ -63,12 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
     topicInputHint: document.getElementById('topic-input-hint'),
 
     // Recent Notifications
+    notificationsTitle: document.getElementById('notifications-title'),
     notificationsList: document.getElementById('notifications-list'),
     topicSidebar: document.getElementById('topic-sidebar'),
-
-    // Tabs
-    tabButtons: document.querySelectorAll('.tab-btn'),
-    tabContents: document.querySelectorAll('.tab-content'),
 
     // Bulk Actions Control Bar
     notificationsControlBar: document.getElementById('notifications-control-bar'),
@@ -83,7 +71,6 @@ document.addEventListener('DOMContentLoaded', () => {
     accessToken: '',
 
     theme: 'auto',
-    defaultTab: 'receive',
     pageUrl: '',
     sendAsZipEnabled: false
   };
@@ -98,11 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let listPointerDown = false; // A press on the Receive list, during which it must not be rebuilt
   let listRefreshPending = false;
   let listRefreshTimer = null;
-  let activeTab = null; // Active tab state, set by switchTab() in init()
-  let receiveFilter = 'all'; // Topic shown on the Receive tab, or 'all'
-  // Opened with the header button in a browser tab instead of the toolbar popup
-  const pageParams = new URLSearchParams(location.search);
-  const isPageMode = pageParams.get('mode') === 'page';
+  let receiveFilter = 'all'; // Topic shown and sent to, or 'all' (nothing to send to)
   let autoTitle = ''; // The tab URL last put in the Title field automatically
   let currentNotifications = []; // Currently displayed notifications for the active topic
   let attachments = [];
@@ -120,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SEND_AS_ZIP_SETTING_KEY = 'sendAsZipEnabled';
   // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl', 'defaultTab', SEND_AS_ZIP_SETTING_KEY];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'sendAnotherEnabled', 'markdownEnabled', 'includeUrl', SEND_AS_ZIP_SETTING_KEY];
   const STORED_FILES_KEY = 'storedFiles';
   const LEGACY_STORED_FILE_KEY = 'storedFile';
 
@@ -145,23 +128,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const manifest = chrome.runtime.getManifest();
     elements.headerText.textContent = manifest.name;
 
-    if (isPageMode) {
-      document.body.classList.add('page-mode');
-      elements.popoutBtn.style.display = 'none';
-      elements.tabUrlBtn.style.display = '';
-      // Coming back to this tab: the user may have moved on to another page
-      document.addEventListener('visibilitychange', async () => {
-        if (document.visibilityState === 'visible') {
-          config.pageUrl = await getPageUrl();
-          applyUrlTitle();
-        }
-      });
-    }
     applyUrlTitle();
-    const requestedTab = pageParams.get('tab');
-    switchTab(requestedTab === 'send' || requestedTab === 'receive' ? requestedTab : config.defaultTab);
-    if (activeTab === 'send') {
-      // Set focus on message input when popup opens
+    autoSizeMessageInput();
+    // Back from the file picker: show the attached files
+    setComposerOptionsOpen(attachments.length > 0);
+    await loadNotifications();
+    if (!elements.composer.hidden) {
       elements.messageInput.focus();
     }
 
@@ -185,23 +157,20 @@ document.addEventListener('DOMContentLoaded', () => {
         accessToken: accessToken,
 
         theme: items.theme || 'auto',
-        defaultTab: items.defaultTab === 'send' ? 'send' : 'receive',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
+        markdownEnabled: items.markdownEnabled === true,
         includeUrl: items.includeUrl === true,
         sendAsZipEnabled: items[SEND_AS_ZIP_SETTING_KEY] === true
       };
 
       // Restore 'Send another' checkbox state
       elements.sendAnotherCheckbox.checked = config.sendAnotherEnabled;
+      elements.markdownCheckbox.checked = config.markdownEnabled;
       elements.includeUrlCheckbox.checked = config.includeUrl;
       elements.zipCheckbox.checked = config.sendAsZipEnabled;
 
       if (items.priority) {
         selectedPriority = items.priority;
-      }
-
-      if (items.lastTopic && config.topics.includes(items.lastTopic)) {
-        config.lastTopic = items.lastTopic;
       }
 
       if (items.lastTags) {
@@ -221,7 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
       theme: config.theme,
-      defaultTab: config.defaultTab,
       includeUrl: elements.includeUrlCheckbox.checked,
       sendAsZipEnabled: config.sendAsZipEnabled
     };
@@ -239,11 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // showSettingsStatus('Saved', 'success');
 
       // We don't want to full updateUI here because it might disrupt typing
-      // But we need to update topic dropdown if topics changed
-      updateTopicDropdown();
       renderTopics(); // Re-render to ensure state consistency
       updateThemeChipsUI(); // Ensure UI reflects state
-      updateDefaultTabChipsUI();
       updateServerAccessUI(config.apiUrl, config.accessToken);
 
     } catch (error) {
@@ -336,25 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==================
-  // Default Tab
-  // ==================
-
-  function updateDefaultTabChipsUI() {
-    document.querySelectorAll('#default-tab-chips .chip').forEach(chip => {
-      chip.classList.toggle('active', chip.dataset.defaultTab === config.defaultTab);
-    });
-  }
-
-  function handleDefaultTabChange(e) {
-    const chip = e.target.closest('.chip');
-    if (!chip || !chip.dataset.defaultTab) return;
-
-    config.defaultTab = chip.dataset.defaultTab;
-    updateDefaultTabChipsUI();
-    saveConfig();
-  }
-
-  // ==================
   // File Handling
   // ==================
 
@@ -433,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAttachments() {
     elements.filePreview.innerHTML = '';
     elements.filePreview.classList.toggle('visible', attachments.length > 0);
-    elements.mainContent.classList.toggle('has-multiple-attachments', attachments.length > 1);
+    updateComposerToggleUI();
     elements.fileBtn.textContent = attachments.length > 0
       ? `📎 Attach files (${attachments.length})`
       : '📎 Attach files';
@@ -643,7 +589,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // An automatically filled tab URL isn't part of the draft: the next popup fills in its own tab's
       title: elements.titleInput.value === autoTitle ? '' : elements.titleInput.value,
       message: elements.messageInput.value,
-      topic: elements.topicSelect.value,
       tags: tags, // Save tags array
       priority: selectedPriority
     };
@@ -688,12 +633,6 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedPriority = draft.priority;
             updatePriorityUI();
           }
-          if (draft.topic) {
-            elements.topicSelect.value = draft.topic;
-            elements.topicDropdownText.textContent = draft.topic;
-            updateCustomDropdownSelection(draft.topic);
-          }
-
           // Keep the draft until a message is sent successfully.
         }
         resolve();
@@ -753,22 +692,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Reading another tab's URL needs the optional "tabs" permission (asked for by the "Use tab URL" button)
-  async function getLastBrowsingTabUrl() {
-    try {
-      if (!(await chrome.permissions.contains({ permissions: ['tabs'] }))) {
-        return '';
-      }
-      const own = await chrome.tabs.getCurrent();
-      const tabs = await chrome.tabs.query({ windowType: 'normal' });
-      const pages = tabs.filter(tab => tab.id !== own?.id && NtfyAPI.isHttpUrl(tab.url));
-      pages.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-      return pages[0]?.url || '';
-    } catch (e) {
-      return '';
-    }
-  }
-
   // "Include current tab's URL" puts the URL in the Title field, where it can still be edited.
   // A title the user typed is left alone.
   function applyUrlTitle() {
@@ -782,30 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
     autoTitle = url;
   }
 
-  function useTabUrl() {
-    // Called directly from the click: permissions.request needs a user gesture
-    chrome.permissions.request({ permissions: ['tabs'] }, async (granted) => {
-      if (!granted) {
-        showStatus('Allow reading tabs to use the tab URL', 'warning');
-        return;
-      }
-      const url = await getLastBrowsingTabUrl();
-      if (!url) {
-        showStatus('No web page tab found', 'warning');
-        return;
-      }
-      config.pageUrl = url;
-      elements.titleInput.value = url.replace(/\/$/, '');
-      autoTitle = elements.titleInput.value;
-    });
-  }
-
   async function getPageUrl() {
-    if (isPageMode) {
-      // The active tab is this page itself: use the web page tab the user was on last
-      return getLastBrowsingTabUrl();
-    }
-
     return new Promise((resolve, reject) => {
       chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
         if (chrome.runtime.lastError) {
@@ -846,8 +746,24 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.serverAccessBtn.addEventListener('click', requestServerAccess);
 
     // Keep the composer text available if the popup closes before sending.
-    elements.titleInput.addEventListener('input', scheduleDraftSave);
-    elements.messageInput.addEventListener('input', scheduleDraftSave);
+    elements.titleInput.addEventListener('input', () => {
+      updateComposerToggleUI();
+      scheduleDraftSave();
+    });
+    elements.messageInput.addEventListener('input', () => {
+      autoSizeMessageInput();
+      scheduleDraftSave();
+    });
+    // In the message bar Enter sends, like in the ntfy web app, and Shift+Enter starts a new line.
+    // Below the title (options open) Enter starts a new line and Ctrl+Enter sends.
+    elements.messageInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      const optionsOpen = elements.composer.classList.contains('options-open');
+      if (optionsOpen ? e.ctrlKey : !e.shiftKey) {
+        e.preventDefault();
+        sendNotification();
+      }
+    });
 
 
     // Topics handling (badges)
@@ -861,9 +777,6 @@ document.addEventListener('DOMContentLoaded', () => {
       saveConfig();
     });
 
-    // Default tab chips
-    elements.defaultTabChips.addEventListener('click', handleDefaultTabChange);
-
     // Open ntfy URL
     elements.openUrlBtn.addEventListener('click', openNtfyUrl);
 
@@ -874,6 +787,13 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.sendAnotherCheckbox.addEventListener('change', () => {
       config.sendAnotherEnabled = elements.sendAnotherCheckbox.checked;
       saveToStorage({ sendAnotherEnabled: config.sendAnotherEnabled });
+    });
+
+    // Format as Markdown: remembered like Send another
+    elements.markdownCheckbox.addEventListener('change', () => {
+      config.markdownEnabled = elements.markdownCheckbox.checked;
+      saveToStorage({ markdownEnabled: config.markdownEnabled });
+      updateComposerToggleUI();
     });
 
     // Send multiple attachments either individually or as one ZIP.
@@ -892,30 +812,15 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.newTagInput.addEventListener('input', updateTagInputHint);
     elements.tagsContainer.addEventListener('click', handleTagRemove);
 
-    // Advanced options toggle
-    elements.advancedToggle.addEventListener('click', toggleAdvancedOptions);
-
-    // Custom topic dropdown
-    elements.topicDropdownSelected.addEventListener('click', toggleTopicDropdown);
-
-    // Tab switching
-    elements.tabButtons.forEach(btn => {
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    // Further send options above the message bar
+    elements.composerToggle.addEventListener('click', () => {
+      setComposerOptionsOpen(!elements.composer.classList.contains('options-open'));
     });
 
-    elements.popoutBtn.addEventListener('click', openInTab);
-    elements.tabUrlBtn.addEventListener('click', useTabUrl);
 
     // Bulk actions
     elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
     elements.deleteAllBtn.addEventListener('click', handleDeleteAll);
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!elements.topicDropdown.contains(e.target)) {
-        closeTopicDropdown();
-      }
-    });
 
     // Listen for storage changes for live UI updates and external picker
     chrome.storage.onChanged.addListener((changes, area) => {
@@ -969,48 +874,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // View Switching
   // ==================
 
-  function switchTab(tab) {
-    if (tab === activeTab) return;
-
-    activeTab = tab;
-
-    // Update active button class
-    elements.tabButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-
-    // Update active content class
-    elements.tabContents.forEach(content => {
-      const isTarget = content.id === `tab-content-${tab}`;
-      content.classList.toggle('active', isTarget);
-    });
-
-    document.body.classList.toggle('receive-active', tab === 'receive');
-
-    // Load notifications on-demand when switching to receive tab
-    if (activeTab === 'receive') {
-      loadNotifications();
-      chrome.runtime.sendMessage({ action: 'sync' });
-    }
-  }
-
-  // Open this page in a browser tab, which unlike the toolbar popup can be any size.
-  // Switch to that tab instead if it is already open (runtime.getContexts: Chrome 116+).
-  async function openInTab() {
-    const pageUrl = chrome.runtime.getURL('popup.html?mode=page');
-    if (chrome.runtime.getContexts) {
-      const contexts = await chrome.runtime.getContexts({ contextTypes: ['TAB'] });
-      const open = contexts.find(context => context.documentUrl && context.documentUrl.startsWith(pageUrl));
-      if (open) {
-        await chrome.tabs.update(open.tabId, { active: true });
-        await chrome.windows.update(open.windowId, { focused: true });
-        window.close();
-        return;
-      }
-    }
-
-    await chrome.tabs.create({ url: `${pageUrl}&tab=${activeTab}` });
-    window.close();
-  }
-
   function showSettingsView() {
     // Populate settings fields with current config
     elements.urlInput.value = config.apiUrl;
@@ -1019,7 +882,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateServerAccessUI(config.apiUrl, config.accessToken);
 
     updateThemeChipsUI();
-    updateDefaultTabChipsUI();
 
     elements.mainView.classList.remove('active');
     elements.settingsView.classList.add('active');
@@ -1045,6 +907,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Refresh UI to reflect any changes made in settings
     updateUI();
     applyUrlTitle();
+    loadNotifications();
   }
 
   // ==================
@@ -1061,82 +924,58 @@ document.addEventListener('DOMContentLoaded', () => {
     // Enable/disable the open URL button based on configuration
     elements.openUrlBtn.disabled = !config.apiUrl;
 
-    // Update topic dropdown
-    if (!isConfigured) {
-      elements.topicSelect.innerHTML = '<option disabled>No topics configured</option>';
-      elements.topicDropdownText.textContent = 'No topics configured';
-      elements.topicDropdownOptions.innerHTML = '';
-    } else {
-      updateTopicDropdown();
-      if (config.lastTopic) {
-        elements.topicSelect.value = config.lastTopic;
-        elements.topicDropdownText.textContent = config.lastTopic;
-        updateCustomDropdownSelection(config.lastTopic);
-      }
-    }
-
-
     updatePriorityUI();
   }
 
-  function updateTopicDropdown() {
-    elements.topicSelect.innerHTML = '';
-    elements.topicDropdownOptions.innerHTML = '';
+  // The composer sends to the selected topic, so it is there only while one is
+  function updateComposer() {
+    const topic = config.apiUrl && receiveFilter !== 'all' ? receiveFilter : null;
+    elements.composer.hidden = !topic;
+    elements.notificationsTitle.textContent = topic || 'All topics';
+    if (topic) {
+      autoSizeMessageInput();
+    } else if (elements.composer.classList.contains('options-open')) {
+      setComposerOptionsOpen(false);
+    }
+  }
 
-    config.topics.forEach(topic => {
-      // Hidden select for form value
-      const option = document.createElement('option');
-      option.value = topic;
-      option.textContent = topic;
-      elements.topicSelect.appendChild(option);
-
-      // Custom dropdown option
-      const customOption = document.createElement('div');
-      customOption.className = 'custom-dropdown-option';
-      customOption.dataset.value = topic;
-      customOption.textContent = topic;
-      customOption.addEventListener('click', () => selectTopic(topic));
-      elements.topicDropdownOptions.appendChild(customOption);
-    });
-
-    // Update displayed text
-    if (config.topics.length > 0) {
-      const selectedTopic = elements.topicSelect.value || config.topics[0];
-      elements.topicDropdownText.textContent = selectedTopic;
-      updateCustomDropdownSelection(selectedTopic);
+  // Open options take the message field below the title, closed ones give it back to the bar
+  function setComposerOptionsOpen(open) {
+    const input = elements.messageInput;
+    const hadFocus = document.activeElement === input;
+    if (open) {
+      elements.messageSlot.appendChild(input);
     } else {
-      elements.topicDropdownText.textContent = 'No topics configured';
+      elements.composerToggle.after(input);
     }
-  }
-
-  function selectTopic(topic) {
-    elements.topicSelect.value = topic;
-    elements.topicDropdownText.textContent = topic;
-    updateCustomDropdownSelection(topic);
-    closeTopicDropdown();
-
-    // Save the selected topic
-    config.lastTopic = topic;
-    saveToStorage({ lastTopic: topic });
-
-    // Load notifications for the new topic if we are on the receive tab
-    if (activeTab === 'receive') {
-      loadNotifications();
+    input.rows = open ? 3 : 1;
+    if (hadFocus) {
+      input.focus();
     }
+
+    elements.composer.classList.toggle('options-open', open);
+    elements.composerToggle.setAttribute('aria-expanded', String(open));
+    elements.composerToggle.title = open ? 'Fewer options' : 'More options';
+    autoSizeMessageInput();
   }
 
-  function updateCustomDropdownSelection(selectedValue) {
-    elements.topicDropdownOptions.querySelectorAll('.custom-dropdown-option').forEach(opt => {
-      opt.classList.toggle('selected', opt.dataset.value === selectedValue);
-    });
+  // A dot on the arrow button while the closed options hold a title, files, or Markdown formatting
+  function updateComposerToggleUI() {
+    const hasExtras = attachments.length > 0 || elements.titleInput.value.trim() !== ''
+      || elements.markdownCheckbox.checked;
+    elements.composerToggle.classList.toggle('has-extras', hasExtras);
   }
 
-  function toggleTopicDropdown() {
-    elements.topicDropdown.classList.toggle('open');
-  }
-
-  function closeTopicDropdown() {
-    elements.topicDropdown.classList.remove('open');
+  // The message field grows with its text, up to a few lines (more below the title)
+  function autoSizeMessageInput() {
+    const input = elements.messageInput;
+    input.style.height = 'auto';
+    if (!input.scrollHeight) {
+      return; // Hidden: sized when the composer shows
+    }
+    const border = input.offsetHeight - input.clientHeight;
+    const maxHeight = elements.composer.classList.contains('options-open') ? 200 : 120;
+    input.style.height = `${Math.min(input.scrollHeight + border, maxHeight)}px`;
   }
 
   function updatePriorityUI() {
@@ -1157,15 +996,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3000);
   }
 
-  function showReceiveStatus(message, type) {
-    elements.receiveStatus.textContent = message;
-    elements.receiveStatus.className = `status visible ${type}`;
-
-    setTimeout(() => {
-      elements.receiveStatus.classList.remove('visible');
-    }, 4000);
-  }
-
   function showSettingsStatus(message, type) {
     elements.settingsStatus.textContent = message;
     elements.settingsStatus.className = `status visible ${type}`;
@@ -1173,12 +1003,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       elements.settingsStatus.classList.remove('visible');
     }, 3000);
-  }
-
-  function toggleAdvancedOptions() {
-    const isOpen = elements.advancedOptions.classList.toggle('visible');
-    elements.advancedToggle.classList.toggle('open', isOpen);
-    elements.mainContent.classList.toggle('advanced-open', isOpen);
   }
 
   // ==================
@@ -1342,7 +1166,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Persist priority
     saveToStorage({ priority: selectedPriority });
-    saveToStorage({ priority: selectedPriority });
   }
 
   // ==================
@@ -1421,7 +1244,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function openNtfyUrl() {
     if (config.apiUrl) {
       let url = config.apiUrl;
-      const topic = elements.topicSelect.value;
+      const topic = receiveFilter;
 
       // Only append topic if it is a valid topic (present in the list of configured topics)
       if (topic && config.topics.includes(topic)) {
@@ -1469,13 +1292,14 @@ document.addEventListener('DOMContentLoaded', () => {
   async function sendNotification() {
     if (isSending) return;
 
-    const topic = elements.topicSelect.value;
+    const topic = receiveFilter;
     const rawMessage = elements.messageInput.value.trim();
     const title = elements.titleInput.value.trim();
 
     // With "Include current tab's URL", the URL is in the title (applyUrlTitle)
     const message = rawMessage;
     const tagsString = tags.join(','); // Use tags array
+    const markdown = elements.markdownCheckbox.checked;
 
     // Capture the latest values before validating or sending so a failed send can be retried.
     await flushDraftSave();
@@ -1495,8 +1319,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (!topic) {
+    if (!config.topics.includes(topic)) {
       showStatus('Select a topic', 'warning');
+      return;
+    }
+
+    // Nothing to send: don't publish an empty message by accident
+    if (!message && !title && filesToSend.length === 0) {
+      elements.messageInput.focus();
       return;
     }
 
@@ -1526,7 +1356,8 @@ document.addEventListener('DOMContentLoaded', () => {
             message: message,
             title: title,
             priority: selectedPriority,
-            tags: tagsString
+            tags: tagsString,
+            markdown
           });
 
           await finishSuccessfulSend(filesToSend.length, 'ZIP sent!');
@@ -1546,7 +1377,8 @@ document.addEventListener('DOMContentLoaded', () => {
               message: message,
               title: title,
               priority: selectedPriority,
-              tags: tagsString
+              tags: tagsString,
+              markdown
             });
           } catch (error) {
             failures.push({ file, error });
@@ -1573,7 +1405,8 @@ document.addEventListener('DOMContentLoaded', () => {
           message: message,
           title: title,
           priority: selectedPriority,
-          tags: tagsString
+          tags: tagsString,
+          markdown
         });
 
         await finishSuccessfulSend(0);
@@ -1590,9 +1423,11 @@ document.addEventListener('DOMContentLoaded', () => {
   async function finishSuccessfulSend(attachmentCount, successMessage) {
     cancelScheduledDraftSave();
     elements.messageInput.value = '';
+    autoSizeMessageInput();
     elements.titleInput.value = '';
     autoTitle = '';
     applyUrlTitle();
+    updateComposerToggleUI();
 
     if (attachmentCount > 0) {
       await clearStoredFiles();
@@ -1603,7 +1438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePriorityUI();
 
     // Close the popup unless "Send another" is checked (the extension's tab stays open).
-    if (!elements.sendAnotherCheckbox.checked && !isPageMode) {
+    if (!elements.sendAnotherCheckbox.checked) {
       setTimeout(() => window.close(), 100);
     } else {
       const notificationText = successMessage || (attachmentCount > 1
@@ -1735,9 +1570,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Recent Notifications
   // ==================
 
-  // Lists the received messages of all topics, like the unread badge counts them. (Filtering by the
-  // Send tab's topic hid everything when that topic was one the token can only send to.)
+  // Lists the received messages of the selected topic, or of all topics
   async function loadNotifications() {
+    if (receiveFilter !== 'all' && !config.topics.includes(receiveFilter)) {
+      receiveFilter = 'all';
+    }
+    updateComposer();
+
     if (!config.apiUrl || config.topics.length === 0) {
       elements.notificationsList.innerHTML = '<div class="notifications-empty">Configure server and topics to view notifications</div>';
       return;
@@ -1750,9 +1589,6 @@ document.addEventListener('DOMContentLoaded', () => {
       thumbnailCache = localData[THUMBNAIL_CACHE_KEY] || {};
       pruneThumbnails(allNotifications);
 
-      if (receiveFilter !== 'all' && !config.topics.includes(receiveFilter)) {
-        receiveFilter = 'all';
-      }
       renderTopicSidebar(allNotifications);
 
       const notifications = receiveFilter === 'all'
@@ -1844,10 +1680,19 @@ document.addEventListener('DOMContentLoaded', () => {
           actions.appendChild(readBtn);
         }
 
+        if (notification.message) {
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'notification-action-btn copy-btn';
+          copyBtn.appendChild(createIcon(COPY_ICON_PATH));
+          copyBtn.title = 'Copy text';
+          copyBtn.addEventListener('click', () => handleCopy(notification.message, copyBtn));
+          actions.appendChild(copyBtn);
+        }
+
         if (notification.attachment && NtfyAPI.isHttpUrl(notification.attachment.url)) {
           const downloadBtn = document.createElement('button');
           downloadBtn.className = 'notification-action-btn download-btn';
-          downloadBtn.appendChild(createDownloadIcon());
+          downloadBtn.appendChild(createIcon(DOWNLOAD_ICON_PATH));
           downloadBtn.title = notification.attachment.name ? `Download ${notification.attachment.name}` : 'Download attachment';
           downloadBtn.addEventListener('click', () => handleDownload(notification.attachment, downloadBtn));
           actions.appendChild(downloadBtn);
@@ -1873,7 +1718,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Topic list of the Receive tab: All topics, then each configured topic, with unread counts
+  // Topic list: All topics, then each configured topic, with unread counts
   function renderTopicSidebar(notifications) {
     const unreadCount = topic => notifications
       .filter(notification => topic === 'all' || notification.topic === topic)
@@ -2145,7 +1990,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ids => ids.includes(messageId) ? ids : [...ids, messageId]);
     } catch (error) {
       console.error('Error saving readMessageIds:', error);
-      showReceiveStatus('Failed to mark as read', 'error');
+      showStatus('Failed to mark as read', 'error');
     }
   }
 
@@ -2190,7 +2035,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ids => ids.filter(id => id !== messageId));
     } catch (error) {
       console.error('Error deleting notification locally:', error);
-      showReceiveStatus('Failed to delete notification', 'error');
+      showStatus('Failed to delete notification', 'error');
     }
   }
 
@@ -2214,11 +2059,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (response.status !== 429 || attempt >= DOWNLOAD_RETRY_DELAYS.length) {
           break;
         }
-        showReceiveStatus('Server is busy, retrying the download…', 'warning');
+        showStatus('Server is busy, retrying the download…', 'warning');
         await new Promise(resolve => setTimeout(resolve, DOWNLOAD_RETRY_DELAYS[attempt]));
       }
       if (!response.ok) {
-        showReceiveStatus(downloadErrorMessage(response.status), 'error');
+        showStatus(downloadErrorMessage(response.status), 'error');
         return;
       }
       const blobUrl = URL.createObjectURL(await response.blob());
@@ -2231,7 +2076,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } catch (error) {
       console.error('Download failed:', error);
-      showReceiveStatus('Download failed', 'error');
+      showStatus('Download failed', 'error');
     } finally {
       btnElement.disabled = false;
     }
@@ -2249,7 +2094,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return `Download failed (HTTP ${status})`;
   }
 
-  function createDownloadIcon() {
+  const DOWNLOAD_ICON_PATH = 'M5 20h14v-2H5v2zm14-11h-4V3H9v6H5l7 7 7-7z';
+  const COPY_ICON_PATH = 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z';
+
+  function createIcon(pathData) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('width', '16');
@@ -2257,9 +2105,26 @@ document.addEventListener('DOMContentLoaded', () => {
     svg.setAttribute('aria-hidden', 'true');
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('fill', 'currentColor');
-    path.setAttribute('d', 'M5 20h14v-2H5v2zm14-11h-4V3H9v6H5l7 7 7-7z');
+    path.setAttribute('d', pathData);
     svg.appendChild(path);
     return svg;
+  }
+
+  // Copies the message as sent (Markdown source for Markdown messages); "Copied" confirms it
+  async function handleCopy(text, btnElement) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Copy failed:', error);
+      showStatus('Copy failed', 'error');
+      return;
+    }
+    btnElement.classList.add('copied');
+    btnElement.textContent = 'Copied';
+    setTimeout(() => {
+      btnElement.classList.remove('copied');
+      btnElement.replaceChildren(createIcon(COPY_ICON_PATH));
+    }, 1500);
   }
 
   async function handleMarkAllRead() {

@@ -11,11 +11,11 @@ A browser extension to send notifications to, and receive them from, [ntfy.sh](h
 
 - **Context Menu**: Right-click to send the current page, selected text, an image, or a link directly to ntfy.
 - **File Upload**: Select multiple files and send them as separate notifications or one ZIP to your ntfy topics.
-- **Quick Sharing**: Send the current page URL or custom text to your ntfy topics, with priority and tags.
+- **Quick Sharing**: Send the current page URL or custom text to your ntfy topics, with priority, tags, and optional Markdown formatting.
 - **Receive Notifications**: Messages from your topics arrive live (WebSocket) as desktop notifications, with an unread count on the icon. Messages published while the browser was closed are fetched when it starts. Messages you send from the extension are marked as read and don't show a desktop notification.
-- **Received Messages List**: The Receive tab lists the messages of all topics, with a topic list to filter them, unread counts, and mark-as-read and delete actions (stored locally). Links in messages are clickable, image attachments show a preview, and attachments can be downloaded.
-- **Open in a Tab**: Open the extension in a browser tab for a larger view, or open the selected topic in the ntfy web app.
-- **Keyboard Shortcuts**: Send messages quickly with `Right Ctrl + Enter`.
+- **One View for Sending and Receiving**: A topic list with unread counts next to the messages of all topics or of the selected one, with mark-as-read and delete actions (stored locally). Links in messages are clickable, message text can be copied, image attachments show a preview, and attachments can be downloaded. With a topic selected, a message bar at the bottom sends to it, like in the ntfy web app; its arrow button opens the title, Markdown, priority, tag, and attachment options.
+- **Open in ntfy**: Open the selected topic in the ntfy web app.
+- **Keyboard Shortcuts**: `Enter` sends from the message bar (`Shift + Enter` for a new line). With the options open, `Enter` starts a new line and `Ctrl + Enter` sends. `Right Ctrl + Enter` sends from anywhere.
 - **Custom Configuration**: Support for self-hosted ntfy servers.
 - **Authentication**: Optional support for token-based authentication.
 - **Privacy First**: No tracking; received messages and their read state are stored locally.
@@ -45,13 +45,13 @@ Open the settings with the gear icon. Changes are saved automatically.
 1. **Server URL**: The base URL of your ntfy server, e.g. `https://ntfy.sh` or your self-hosted instance.
 2. **Access Token**: Optional, for private topics or servers that require authentication. It is stored locally and is not copied to other browsers by browser sync. With a token (or credentials in the server URL), click **Allow access to this server**: ntfy's CORS headers don't allow the `Authorization` header, so the extension needs permission for the server's site.
 3. **Topics**: Add the topics to send to. The extension receives from the topics your credentials can read; a topic you can only send to is used for sending only.
-4. **Include current tab's URL**: Puts the page URL in the message title. In the extension's tab, **Use tab URL** fills in the page you were on last (it asks once for permission to read tabs).
-5. **Default Tab**: Whether the extension opens on the **Send** or the **Receive** tab.
-6. **Appearance**: Light, dark, or automatic (follows the system).
+4. **Include current tab's URL**: Puts the page URL in the message title.
+5. **Appearance**: Light, dark, or automatic (follows the system).
 
 ### Sending
 
-- **Priority and Tags**: Set them under **Advanced options**. The last used priority and tags are remembered for the next message.
+- **Message bar**: Select a topic to send to it from the bar at the bottom. The arrow button next to it opens the title, **Format as Markdown**, priority, tags, and attachments; the message field then moves below the title.
+- **Priority and Tags**: The last used priority and tags are remembered for the next message.
 - **Attachments**: When multiple files are attached, the extension sends them as separate notifications by default. Enable **Send files as one ZIP** below the attachment list to send all of them in one ZIP attachment instead. The preference is remembered and can be switched at any time.
 - **Send another**: Keeps the extension open after sending, for the next message.
 
@@ -74,19 +74,27 @@ The build output (`send-to-ntfy-chrome.zip`, `send-to-ntfy-firefox.xpi`) is plac
 
 <table>
   <tr>
-    <th>Send</th>
-    <th>Settings</th>
+    <th>Messages</th>
+    <th>Sending, with the options open</th>
   </tr>
   <tr>
-    <td valign="top"><img src="screenshots/send.png" width="400" alt="Send tab with two attached files"></td>
-    <td valign="top"><img src="screenshots/settings.png" width="400" alt="Settings"></td>
+    <td valign="top"><img src="screenshots/receive.png" width="400" alt="All topics with the topic list, unread counts, and an image preview"></td>
+    <td valign="top"><img src="screenshots/send.png" width="400" alt="Message bar of a topic with title, priority, tags, and two attached files"></td>
   </tr>
   <tr>
-    <th>Receive</th>
+    <th>Markdown</th>
     <th>Dark mode</th>
   </tr>
   <tr>
-    <td valign="top"><img src="screenshots/receive.png" width="400" alt="Receive tab with the topic list, unread counts, and an image preview"></td>
-    <td valign="top"><img src="screenshots/receive-dark.png" width="400" alt="Receive tab in dark mode"></td>
+    <td valign="top"><img src="screenshots/markdown.png" width="400" alt="A Markdown message with a heading, table, task list, and code"></td>
+    <td valign="top"><img src="screenshots/receive-dark.png" width="400" alt="All topics in dark mode"></td>
+  </tr>
+  <tr>
+    <th>Settings</th>
+    <th></th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="screenshots/settings.png" width="400" alt="Settings"></td>
+    <td></td>
   </tr>
 </table>

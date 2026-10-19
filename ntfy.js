@@ -169,9 +169,10 @@ const NtfyAPI = {
      * @param {string} [options.title] - Optional title
      * @param {number} [options.priority] - Optional priority (1-5, default 3)
      * @param {string} [options.tags] - Optional comma-separated tags
+     * @param {boolean} [options.markdown] - Format the message as Markdown
      * @returns {Promise<Response>}
      */
-    async sendNotification(config, topic, { message, title, priority, tags }) {
+    async sendNotification(config, topic, { message, title, priority, tags, markdown }) {
         const fullUrl = this.buildTopicUrl(config.apiUrl, topic);
         const headers = this.buildAuthHeaders(config.accessToken, config.apiUrl);
 
@@ -183,6 +184,9 @@ const NtfyAPI = {
         }
         if (tags) {
             headers.set('X-Tags', this.encodeHeaderValue(tags));
+        }
+        if (markdown) {
+            headers.set('X-Markdown', 'yes');
         }
 
         const response = await fetch(fullUrl, {
@@ -211,9 +215,10 @@ const NtfyAPI = {
      * @param {string} [options.title] - Optional title
      * @param {number} [options.priority] - Optional priority (1-5, default 3)
      * @param {string} [options.tags] - Optional comma-separated tags
+     * @param {boolean} [options.markdown] - Format the message as Markdown
      * @returns {Promise<Response>}
      */
-    async sendAttachment(config, topic, { data, filename, contentType, message, title, priority, tags }) {
+    async sendAttachment(config, topic, { data, filename, contentType, message, title, priority, tags, markdown }) {
         const fullUrl = this.buildTopicUrl(config.apiUrl, topic);
         const headers = this.buildAuthHeaders(config.accessToken, config.apiUrl);
 
@@ -233,6 +238,9 @@ const NtfyAPI = {
         }
         if (tags) {
             headers.set('X-Tags', this.encodeHeaderValue(tags));
+        }
+        if (markdown) {
+            headers.set('X-Markdown', 'yes');
         }
 
         const response = await fetch(fullUrl, {
@@ -289,7 +297,7 @@ const NtfyAPI = {
     },
 
     /**
-     * Remember a message this extension published, so it shows as read on the Receive tab and gets
+     * Remember a message this extension published, so it shows as read in the message list and gets
      * no desktop notification when it comes back from the server
      * @param {Response} response - ntfy's publish response, the message as JSON
      * @returns {Promise<void>}
