@@ -1933,7 +1933,7 @@ document.addEventListener('DOMContentLoaded', () => {
         message.replaceChildren(...(markdown || linkify(text)));
         item.appendChild(message);
 
-        if (isImageAttachment(notification.attachment)) {
+        if (NtfyAPI.isImageAttachment(notification.attachment)) {
           item.appendChild(createImagePreview(notification));
         }
 
@@ -2117,27 +2117,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Image Previews
   // ==================
 
-  // Downscaled copies of image attachments, by message id, so the list doesn't load full-size images
-  const THUMBNAIL_CACHE_KEY = 'imageThumbnails';
-  const THUMBNAIL_MAX_SIZE = 320; // px, longest side (shown at up to half that, sharp on HiDPI screens)
-  const THUMBNAIL_MAX_SOURCE_BYTES = 15 * 1024 * 1024;
+  const THUMBNAIL_CACHE_KEY = NtfyAPI.THUMBNAIL_CACHE_KEY;
   let thumbnailCache = {};
   const thumbnailJobs = new Map(); // message id -> Promise<string|null>
   let thumbnailCacheQueue = Promise.resolve();
-
-  // Only files uploaded to the ntfy server get a preview: the server reports their size (and type and
-  // expiry). An attachment can also be a link to a file anywhere (X-Attach), which has none of those;
-  // loading it by itself would let anyone who can publish to the topic make the popup request any
-  // host, like an image in Markdown would (not loaded either), and of any size.
-  function isImageAttachment(attachment) {
-    if (!attachment || !NtfyAPI.isHttpUrl(attachment.url) || typeof attachment.size !== 'number') {
-      return false;
-    }
-    if (attachment.type) {
-      return attachment.type.startsWith('image/');
-    }
-    return /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(attachment.name || '');
-  }
 
   function createImagePreview(notification) {
     const attachment = notification.attachment;
@@ -2175,7 +2158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (thumbnailCache[id]) {
       return Promise.resolve(thumbnailCache[id]);
     }
-    if (attachment.expires && attachment.expires * 1000 < Date.now()) {
+    if (NtfyAPI.isAttachmentExpired(attachment)) {
       console.warn(`Image preview: ${attachment.name || 'the attachment'} has expired`);
       return Promise.resolve(null);
     }
@@ -2183,7 +2166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!thumbnailJobs.has(id)) {
       thumbnailJobs.set(id, (async () => {
         try {
-          const dataUrl = await createThumbnail(attachment);
+          const dataUrl = await NtfyAPI.createThumbnail(attachment);
           await storeThumbnail(id, dataUrl);
           return dataUrl;
         } catch (e) {
@@ -2199,27 +2182,6 @@ document.addEventListener('DOMContentLoaded', () => {
       })());
     }
     return thumbnailJobs.get(id);
-  }
-
-  async function createThumbnail(attachment) {
-    if (attachment.size > THUMBNAIL_MAX_SOURCE_BYTES) {
-      throw new Error('Image too large');
-    }
-
-    const response = await fetch(attachment.url);
-    if (!response.ok) {
-      throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
-    }
-    const bitmap = await createImageBitmap(await response.blob());
-    const scale = Math.min(1, THUMBNAIL_MAX_SIZE / Math.max(bitmap.width, bitmap.height));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-
-    return canvas.toDataURL('image/webp', 0.8);
   }
 
   // Stored one write at a time, so thumbnails made at the same time don't overwrite each other

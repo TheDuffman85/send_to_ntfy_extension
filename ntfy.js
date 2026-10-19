@@ -194,6 +194,74 @@ const NtfyAPI = {
         }
     },
 
+    // Downscaled copies of image attachments, by message id, kept in storage.local: the popup's list and
+    // the desktop notifications show them, so neither loads full-size images
+    THUMBNAIL_CACHE_KEY: 'imageThumbnails',
+    THUMBNAIL_MAX_SIZE: 320, // px, longest side (shown at up to half that in the popup, sharp on HiDPI screens)
+    THUMBNAIL_MAX_SOURCE_BYTES: 15 * 1024 * 1024,
+
+    /**
+     * Whether an attachment gets an image preview. Only files uploaded to the ntfy server do: the server
+     * reports their size (and type and expiry). An attachment can also be a link to a file anywhere
+     * (X-Attach), which has none of those; loading it by itself would let anyone who can publish to the
+     * topic make the extension request any host, like an image in Markdown would (not loaded either),
+     * and of any size.
+     * @param {Object} attachment
+     * @returns {boolean}
+     */
+    isImageAttachment(attachment) {
+        if (!attachment || !this.isHttpUrl(attachment.url) || typeof attachment.size !== 'number') {
+            return false;
+        }
+        if (attachment.type) {
+            return attachment.type.startsWith('image/');
+        }
+        return /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(attachment.name || '');
+    },
+
+    /**
+     * Whether the server has deleted the attachment by now
+     * @param {Object} attachment
+     * @returns {boolean}
+     */
+    isAttachmentExpired(attachment) {
+        return Boolean(attachment.expires) && attachment.expires * 1000 < Date.now();
+    },
+
+    /**
+     * Load an image attachment and downscale it. Rejects with an error whose status is the HTTP
+     * status if the server refused, e.g. 429 for its request limit.
+     * @param {Object} attachment
+     * @returns {Promise<string>} data URL of the thumbnail
+     */
+    async createThumbnail(attachment) {
+        if (attachment.size > this.THUMBNAIL_MAX_SOURCE_BYTES) {
+            throw new Error('Image too large');
+        }
+
+        const response = await fetch(attachment.url);
+        if (!response.ok) {
+            throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+        }
+        const bitmap = await createImageBitmap(await response.blob());
+        const scale = Math.min(1, this.THUMBNAIL_MAX_SIZE / Math.max(bitmap.width, bitmap.height));
+
+        // OffscreenCanvas, as the background service worker has no document
+        const canvas = new OffscreenCanvas(
+            Math.max(1, Math.round(bitmap.width * scale)),
+            Math.max(1, Math.round(bitmap.height * scale)));
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+
+        const blob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.8 });
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        }
+        return `data:${blob.type};base64,${btoa(binary)}`;
+    },
+
     /**
      * Base64-encode a UTF-8 string
      * @param {string} value

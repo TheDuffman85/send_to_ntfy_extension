@@ -828,7 +828,7 @@ async function saveNotificationToHistory(notification) {
     return updated.includes(notification);
 }
 
-function showDesktopNotification(notification) {
+async function showDesktopNotification(notification) {
     const priorityLabels = {
         1: '⇊ Min',
         2: '↓ Low',
@@ -844,11 +844,16 @@ function showDesktopNotification(notification) {
         buttons.push({ title: `🔗 Open attachment (${new URL(notification.attachment.url).host})` });
     }
     let message = Emojis.formatMessage({ ...notification, message: notificationText(notification) });
+    // Tags that are emojis already show in front of the title or message, like in the popup
+    const otherTags = Emojis.unmatchedTags(notification.tags);
+    if (otherTags.length > 0) {
+        message += `\nTags: ${otherTags.join(', ')}`;
+    }
     if (NtfyAPI.isHttpUrl(notification.click)) {
         message += `\n↗ ${new URL(notification.click).host}`;
     }
 
-    createNotification(notification.id, {
+    const options = {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
         title: (notification.title ? Emojis.formatTitle(notification) : 'Notification') + priorityLabel,
@@ -856,7 +861,74 @@ function showDesktopNotification(notification) {
         contextMessage: `Topic: ${notification.topic}`,
         buttons: buttons,
         requireInteraction: notification.priority >= 4
-    });
+    };
+
+    // An image attachment shows as in the popup: Chrome shows it large below the message, Firefox
+    // (which has only basic notifications) in place of the icon
+    const image = await notificationImage(notification);
+    if (image && IS_FIREFOX) {
+        options.iconUrl = image;
+    } else if (image) {
+        options.type = 'image';
+        options.imageUrl = image;
+    }
+
+    return createNotification(notification.id, options);
+}
+
+const IS_FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBrowserInfo === 'function';
+const NOTIFICATION_IMAGE_TIMEOUT = 5000; // ms; after that, the notification shows without the image
+
+// Resolves to the thumbnail's data URL, or null if the message has no image to show (or it takes too long)
+async function notificationImage(notification) {
+    const attachment = notification.attachment;
+    if (!NtfyAPI.isImageAttachment(attachment) || NtfyAPI.isAttachmentExpired(attachment)) {
+        return null;
+    }
+    try {
+        const stored = (await chrome.storage.local.get([NtfyAPI.THUMBNAIL_CACHE_KEY]))[NtfyAPI.THUMBNAIL_CACHE_KEY] || {};
+        if (stored[notification.id]) {
+            return stored[notification.id];
+        }
+        if (await rateLimitRemaining() > 0) {
+            return null;
+        }
+
+        let timer;
+        const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), NOTIFICATION_IMAGE_TIMEOUT); });
+        const thumbnail = NtfyAPI.createThumbnail(attachment).then(async dataUrl => {
+            await storeThumbnail(notification.id, dataUrl); // The popup's list uses it too
+            return dataUrl;
+        });
+        thumbnail.catch(() => {}); // Handled below, unless the timeout won
+        try {
+            return await Promise.race([thumbnail, timeout]);
+        } finally {
+            clearTimeout(timer);
+        }
+    } catch (e) {
+        if (e.status === 429) {
+            await noteRateLimited();
+        }
+        console.warn(`Notification image: could not load ${attachment.name || 'the attachment'}:`, e.message);
+        return null;
+    }
+}
+
+// Stored one write at a time, so thumbnails made at the same time don't overwrite each other
+let thumbnailQueue = Promise.resolve();
+function storeThumbnail(id, dataUrl) {
+    thumbnailQueue = thumbnailQueue.then(async () => {
+        const key = NtfyAPI.THUMBNAIL_CACHE_KEY;
+        const { receivedNotifications = [], [key]: stored = {} } =
+            await chrome.storage.local.get(['receivedNotifications', key]);
+        // Not for a message deleted meanwhile, which the popup would no longer prune
+        if (receivedNotifications.some(notification => notification.id === id)) {
+            stored[id] = dataUrl;
+            await chrome.storage.local.set({ [key]: stored });
+        }
+    }).catch(error => console.error('Error saving image thumbnail:', error));
+    return thumbnailQueue;
 }
 
 // Messages of priority 4 and 5 stay on screen until dismissed. Anyone who can publish to a topic can
