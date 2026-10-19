@@ -4,17 +4,18 @@
 const NtfyAPI = {
     /**
      * Get configuration from storage
-     * @returns {Promise<{apiUrl: string, accessToken: string, topics: string[]}>}
+     * @returns {Promise<{apiUrl: string, accessToken: string, topics: string[], includeUrl: boolean, receiveEnabled: boolean}>}
      */
     async getConfig() {
         const accessToken = await this.getAccessToken();
         return new Promise((resolve) => {
-            chrome.storage.sync.get(['apiUrl', 'topics', 'includeUrl'], (items) => {
+            chrome.storage.sync.get(['apiUrl', 'topics', 'includeUrl', 'receiveEnabled'], (items) => {
                 resolve({
                     apiUrl: items.apiUrl || '',
                     accessToken: accessToken,
                     topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
-                    includeUrl: items.includeUrl === true
+                    includeUrl: items.includeUrl === true,
+                    receiveEnabled: items.receiveEnabled === true
                 });
             });
         });
@@ -122,6 +123,66 @@ const NtfyAPI = {
     },
 
     /**
+     * Host permission match pattern for the server's site, or null for an invalid URL
+     * @param {string} apiUrl
+     * @returns {string|null}
+     */
+    serverOriginPattern(apiUrl) {
+        try {
+            const url = new URL(apiUrl);
+            if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+                return null;
+            }
+            // Match patterns have no port and match every port
+            return `${url.protocol}//${url.hostname}/*`;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /**
+     * fetch for a request to the ntfy server. ntfy's CORS headers let the extension through, but a
+     * server behind e.g. a reverse proxy may not. When a request fails without a response, see
+     * whether that is the cause (see checkServerAccessBlocked).
+     * @param {Object} config - Configuration object with apiUrl and accessToken
+     * @param {string} url
+     * @param {RequestInit} options
+     * @returns {Promise<Response>}
+     */
+    async serverFetch(config, url, options) {
+        try {
+            return await fetch(url, options);
+        } catch (error) {
+            await this.checkServerAccessBlocked(config);
+            throw error;
+        }
+    },
+
+    /**
+     * After a request failed without a response: if the server can be reached all the same (a
+     * no-cors request gets an answer whatever its CORS headers say), they blocked the request. A
+     * host permission for the server lifts that, so remember the server's site for the settings to
+     * offer "Allow access to this server".
+     * @param {Object} config - Configuration object with apiUrl
+     * @returns {Promise<void>}
+     */
+    async checkServerAccessBlocked(config) {
+        const pattern = this.serverOriginPattern(config.apiUrl);
+        if (!pattern) {
+            return;
+        }
+        try {
+            if (await chrome.permissions.contains({ origins: [pattern] })) {
+                return;
+            }
+            await fetch(`${new URL(config.apiUrl).origin}/v1/health`, { mode: 'no-cors' });
+        } catch (e) {
+            return; // The server can't be reached at all: not a question of access
+        }
+        await chrome.storage.local.set({ serverAccessBlocked: pattern });
+    },
+
+    /**
      * Build the full ntfy URL for a topic
      * @param {string} apiUrl - Base ntfy server URL
      * @param {string} topic - Topic name
@@ -189,7 +250,7 @@ const NtfyAPI = {
             headers.set('X-Markdown', 'yes');
         }
 
-        const response = await fetch(fullUrl, {
+        const response = await this.serverFetch(config, fullUrl, {
             method: 'POST',
             headers: headers,
             body: message || ''
@@ -243,7 +304,7 @@ const NtfyAPI = {
             headers.set('X-Markdown', 'yes');
         }
 
-        const response = await fetch(fullUrl, {
+        const response = await this.serverFetch(config, fullUrl, {
             method: 'POST',
             headers: headers,
             body: data
@@ -332,7 +393,7 @@ const NtfyAPI = {
      */
     async canReadTopic(config, topic) {
         try {
-            const response = await fetch(`${this.buildTopicUrl(config.apiUrl, topic)}/auth`, {
+            const response = await this.serverFetch(config, `${this.buildTopicUrl(config.apiUrl, topic)}/auth`, {
                 method: 'GET',
                 headers: this.buildAuthHeaders(config.accessToken, config.apiUrl)
             });
@@ -370,7 +431,7 @@ const NtfyAPI = {
         const fullUrl = `${this.buildTopicUrl(baseUrl, topic)}/json?poll=1&since=${since}`;
         const headers = this.buildAuthHeaders(config.accessToken, baseUrl);
 
-        const response = await fetch(fullUrl, {
+        const response = await this.serverFetch(config, fullUrl, {
             method: 'GET',
             headers: headers
         });

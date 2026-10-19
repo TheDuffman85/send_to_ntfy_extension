@@ -47,6 +47,42 @@
     --border-color: #cdd5d2;
     --border-focus: #338574;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+    /* Popup size (Medium), set in the settings: the popup's outer size, and the scale of its
+       text and spacing. popup.html zooms the page by the scale. */
+    --popup-width: 600px;
+    --popup-height: 596px;
+    --ui-scale: 0.9;
+    --header-height: 40px;
+
+    /* Input fields: a light tint over the card or page behind them */
+    --field-bg: rgba(17, 17, 17, 0.03);
+    --field-bg-hover: rgba(17, 17, 17, 0.05);
+
+    /* Amber notice */
+    --notice-bg: #fff3d6;
+    --notice-border: #f0b429;
+    --notice-text: #5c3d00;
+    --notice-link: #8a5a00;
+}
+
+/* The views below the header, in the zoomed page's pixels. Set on body, where the size's values are. */
+body {
+    --main-height: calc(var(--popup-height) / var(--ui-scale) - var(--header-height));
+}
+
+/* Popup sizes; Medium and Large use the browsers' full popup height (600 px), Large also the
+   full width (800 px). Small and Medium scale the text down. */
+body[data-size="small"] {
+    --popup-width: 480px;
+    --popup-height: 520px;
+    --ui-scale: 0.8;
+}
+
+body[data-size="large"] {
+    --popup-width: 800px;
+    --popup-height: 596px;
+    --ui-scale: 1;
 }
 
 /* Dark theme - matching NTFY.sh web UI */
@@ -60,6 +96,12 @@ body[data-theme="dark"] {
     --border-focus: #4a9d8c;
     --primary-light: #66c0ac; /* text accent: 6.7:1 on the dark inputs */
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --field-bg: rgba(255, 255, 255, 0.04);
+    --field-bg-hover: rgba(255, 255, 255, 0.06);
+    --notice-bg: #3a3020;
+    --notice-border: #c8922a;
+    --notice-text: #f5e2bc;
+    --notice-link: #ffc857;
 }
 
 /* Auto theme (system preference) */
@@ -75,6 +117,12 @@ body[data-theme="dark"] {
         --border-focus: #4a9d8c;
         --primary-light: #66c0ac; /* text accent: 6.7:1 on the dark inputs */
         --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        --field-bg: rgba(255, 255, 255, 0.04);
+        --field-bg-hover: rgba(255, 255, 255, 0.06);
+        --notice-bg: #3a3020;
+        --notice-border: #c8922a;
+        --notice-text: #f5e2bc;
+        --notice-link: #ffc857;
     }
 }
 
@@ -176,16 +224,13 @@ body {
     box-shadow: none;
 }
 
-/* Highlighted settings button when not configured */
+/* Highlighted settings button while a setting is missing: an amber border and background, as on
+   the Required settings, fade in and out; the icon keeps its color */
 .icon-btn.highlight {
-    background: white;
-    color: var(--primary);
-    border-color: white;
+    border-color: var(--notice-border);
+    box-shadow: inset 0 0 0 1px var(--notice-border); /* 2px with the border */
+    background: var(--notice-border);
     animation: pulse 1.5s ease-in-out infinite;
-}
-
-.icon-btn.highlight:hover {
-    background: #f0f0f0;
 }
 
 /* Back button visibility */
@@ -201,11 +246,15 @@ body {
 
     0%,
     100% {
-        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+        border-color: var(--notice-border);
+        box-shadow: inset 0 0 0 1px var(--notice-border);
+        background: var(--notice-border);
     }
 
     50% {
-        box-shadow: 0 0 0 6px rgba(255, 255, 255, 0);
+        border-color: transparent;
+        box-shadow: inset 0 0 0 1px transparent;
+        background: transparent;
     }
 }
 
@@ -229,13 +278,6 @@ body {
     padding: 12px 16px;
     padding-bottom: 12px;
     min-height: auto;
-}
-
-/* Disabled/unconfigured state */
-.view.disabled {
-    opacity: 0.4;
-    pointer-events: none;
-    user-select: none;
 }
 
 /* ========================================
@@ -264,15 +306,15 @@ body {
 .form-select,
 .form-textarea {
     width: 100%;
-    padding: 4px 0 10px 0;
+    padding: 6px 8px 8px;
     font-size: 15px;
-    background-color: transparent;
+    background-color: var(--field-bg);
     color: var(--text-primary);
     border: none;
     border-bottom: 2px solid var(--border-color);
     margin-bottom: -1px;
-    border-radius: 0;
-    transition: border-color 0.2s;
+    border-radius: 6px 6px 0 0;
+    transition: border-color 0.2s, background-color 0.2s;
     outline: none;
 }
 
@@ -280,6 +322,7 @@ body {
 .form-select:hover,
 .form-textarea:hover {
     border-bottom-color: var(--border-focus);
+    background-color: var(--field-bg-hover);
 }
 
 .form-input:focus,
@@ -289,7 +332,8 @@ body {
 }
 
 .form-input::placeholder,
-.form-textarea::placeholder {
+.form-textarea::placeholder,
+.topic-input-field::placeholder {
     font-size: 13px;
     font-style: italic;
     color: var(--text-secondary);
@@ -338,19 +382,20 @@ body {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding: 4px 0 8px 0;
-    background-color: transparent;
+    padding: 5px 8px 6px;
+    background-color: var(--field-bg);
     border: none;
     border-bottom: 2px solid var(--border-color);
     margin-bottom: -1px;
-    border-radius: 0;
+    border-radius: 6px 6px 0 0;
     min-height: 38px;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, background-color 0.2s;
 }
 
 .topics-container:hover,
 .tags-container:hover {
     border-bottom-color: var(--border-focus);
+    background-color: var(--field-bg-hover);
 }
 
 .topics-container:focus-within,
@@ -461,8 +506,7 @@ body {
     flex-direction: column;
     gap: 6px;
     margin-top: 8px;
-    max-height: 100px;
-    overflow-y: auto;
+    /* No scrolling of its own: the send options around it scroll */
 }
 
 .file-preview.visible {
@@ -479,17 +523,90 @@ body {
     border-radius: 8px;
 }
 
-.zip-toggle {
-    display: none;
+/* On/off row: title and explanation, with a switch on the right (settings, Send files as one ZIP) */
+.switch-row {
+    display: flex;
     position: relative;
     align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.switch-copy {
+    flex: 1;
+    min-width: 0;
+}
+
+.switch-title,
+.switch-hint {
+    display: block;
+}
+
+.switch-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.switch-hint {
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.switch-row input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.switch {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 20px;
+    padding: 2px;
+    background-color: var(--border-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.switch span {
+    display: block;
+    width: 14px;
+    height: 14px;
+    background-color: var(--bg-card);
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s;
+}
+
+.switch-row input[type="checkbox"]:checked + .switch {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.switch-row input[type="checkbox"]:checked + .switch span {
+    transform: translateX(14px);
+}
+
+.switch-row input[type="checkbox"]:focus-visible + .switch {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+}
+
+/* Send files as one ZIP: a framed row, shown with more than one attachment */
+.zip-toggle {
+    display: none;
     gap: 10px;
     margin-top: 8px;
     padding: 9px 10px;
     background-color: var(--bg-input);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    cursor: pointer;
     transition: border-color 0.2s, background-color 0.2s, opacity 0.2s;
 }
 
@@ -504,72 +621,6 @@ body {
 .zip-toggle.disabled {
     opacity: 0.55;
     cursor: not-allowed;
-}
-
-.zip-toggle-copy {
-    flex: 1;
-    min-width: 0;
-}
-
-.zip-toggle-title,
-.zip-toggle-hint {
-    display: block;
-}
-
-.zip-toggle-title {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.zip-toggle-hint {
-    margin-top: 2px;
-    color: var(--text-secondary);
-    font-size: 10px;
-}
-
-.zip-toggle input[type="checkbox"] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-}
-
-.zip-switch {
-    display: inline-flex;
-    align-items: center;
-    flex: 0 0 auto;
-    width: 34px;
-    height: 20px;
-    padding: 2px;
-    background-color: var(--border-color);
-    border: 1px solid var(--border-color);
-    border-radius: 999px;
-    transition: background-color 0.2s, border-color 0.2s;
-}
-
-.zip-switch span {
-    display: block;
-    width: 14px;
-    height: 14px;
-    background-color: var(--bg-card);
-    border-radius: 50%;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s;
-}
-
-.zip-toggle input[type="checkbox"]:checked + .zip-switch {
-    background-color: var(--primary);
-    border-color: var(--primary);
-}
-
-.zip-toggle input[type="checkbox"]:checked + .zip-switch span {
-    transform: translateX(14px);
-}
-
-.zip-toggle input[type="checkbox"]:focus-visible + .zip-switch {
-    outline: 2px solid var(--border-focus);
-    outline-offset: 2px;
 }
 
 .file-icon {
@@ -730,35 +781,15 @@ body {
     margin-top: 0;
 }
 
-.checkbox-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-}
-
-.checkbox-group input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
-    accent-color: var(--primary);
-    cursor: pointer;
-}
-
-.checkbox-group label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-
-
 /* ========================================
    Tooltip
    ======================================== */
 
 .tooltip {
     position: fixed;
+    /* Placed when shown; until then out of the way, so it doesn't add to the popup's height */
+    top: 0;
+    left: 0;
     padding: 6px 10px;
     background-color: var(--bg-card);
     color: var(--text-primary);
@@ -1112,6 +1143,25 @@ body.filepicker-page {
     color: #f44336;
 }
 
+/* Nothing to head or manage before the setup is done */
+.notifications-section.setup .section-header {
+    display: none;
+}
+
+.setup-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 40px;
+}
+
+.setup-hint-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
 /* Read state */
 .notification-item.read {
     opacity: 0.75;
@@ -1249,14 +1299,128 @@ body.filepicker-page {
 }
 
 /* ========================================
+   Settings View: sections as cards
+   ======================================== */
+
+/* As tall as its sections, up to the main view's height; beyond that they scroll */
+#settings-view.active {
+    max-height: var(--main-height);
+    overflow-y: auto;
+}
+
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.settings-section {
+    padding: 10px 12px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+}
+
+.settings-section-title {
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--primary-light);
+}
+
+/* A setting needed to send and receive, still empty */
+.settings-section.missing {
+    border-color: var(--notice-border);
+    border-left-width: 4px;
+}
+
+.settings-section.missing .settings-section-title::after {
+    content: 'Required';
+    margin-left: 8px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background-color: var(--notice-bg);
+    color: var(--notice-link);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* Two settings side by side (server URL and token, theme and size) */
+.settings-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.settings-section .form-group {
+    margin-bottom: 0;
+    min-width: 0;
+}
+
+.settings-section .form-input {
+    padding: 4px 8px 6px;
+}
+
+.settings-section .form-hint {
+    margin-top: 3px;
+    padding-bottom: 0;
+}
+
+.settings-section #server-access-btn {
+    margin-top: 6px;
+}
+
+.settings-section .switch-title {
+    font-size: 14px;
+}
+
+.settings-section .switch-hint {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+/* Stays in view while the sections scroll */
+.settings-content > .status {
+    position: sticky;
+    bottom: 0;
+    margin-top: 0;
+    box-shadow: var(--shadow);
+}
+
+/* The status tints, opaque over the scrolled sections */
+.settings-content > .status.success {
+    background-color: color-mix(in srgb, var(--primary) 15%, var(--bg-card));
+}
+
+.settings-content > .status.error {
+    background-color: color-mix(in srgb, #e53935 15%, var(--bg-card));
+}
+
+.settings-content > .status.warning {
+    background-color: color-mix(in srgb, #ff9800 15%, var(--bg-card));
+}
+
+/* ========================================
    Main View: Topic List, Messages, Composer
    ======================================== */
 
-/* Fixed height, so the composer stays at the bottom and the message list takes the rest */
+/* Fixed height, so the composer stays at the bottom and the message list takes the rest.
+   The receive hint above takes its height from it, so the popup keeps its size. */
+#main-view.active {
+    display: flex;
+    flex-direction: column;
+    height: var(--main-height);
+}
+
 .receive-layout {
+    flex: 1;
+    min-height: 0;
     display: flex;
     gap: 10px;
-    height: 500px;
 }
 
 .receive-layout .notifications-section {
@@ -1340,6 +1504,55 @@ body.filepicker-page {
     margin-top: 8px;
 }
 
+/* One-time hint about the Receive messages setting, below the header */
+.receive-hint {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 16px 0;
+    padding: 8px 6px 8px 10px;
+    background-color: var(--notice-bg);
+    border: 1px solid var(--notice-border);
+    border-left-width: 4px;
+    border-radius: 8px;
+    color: var(--notice-text);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.receive-hint[hidden] {
+    display: none;
+}
+
+.receive-hint-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.receive-hint-dismiss {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--notice-text);
+    cursor: pointer;
+}
+
+.receive-hint-dismiss:hover {
+    background-color: var(--notice-border);
+}
+
+.receive-hint-dismiss svg {
+    fill: currentColor;
+}
+
 /* ========================================
    Composer (like the ntfy web app's message bar)
    ======================================== */
@@ -1392,6 +1605,40 @@ body.filepicker-page {
     margin-top: 6px;
 }
 
+/* Open options: the bar below them becomes their footer */
+.composer.options-open .composer-bar {
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.send-another {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.composer.options-open .send-another {
+    display: flex;
+}
+
+.send-another input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.send-label {
+    display: none;
+}
+
 .composer-bar {
     display: flex;
     align-items: flex-end;
@@ -1402,20 +1649,20 @@ body.filepicker-page {
 .composer-input {
     flex: 1;
     min-width: 0;
-    padding: 6px 0;
+    padding: 6px 8px;
     font: inherit;
     font-size: 15px;
     line-height: 1.4;
     color: var(--text-primary);
-    background: transparent;
+    background-color: var(--field-bg);
     border: none;
     border-bottom: 2px solid var(--border-color);
-    border-radius: 0;
+    border-radius: 6px 6px 0 0;
     outline: none;
     resize: none;
     overflow-y: auto;
     scrollbar-width: thin;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, background-color 0.2s;
 }
 
 #message-slot .composer-input {
@@ -1426,6 +1673,10 @@ body.filepicker-page {
 .composer-input:hover,
 .composer-input:focus {
     border-bottom-color: var(--border-focus);
+}
+
+.composer-input:hover {
+    background-color: var(--field-bg-hover);
 }
 
 .composer-input::placeholder {
@@ -1446,6 +1697,11 @@ body.filepicker-page {
     color: var(--text-secondary);
     cursor: pointer;
     transition: background-color 0.2s, color 0.2s;
+}
+
+/* The options toggle, when not receiving */
+.composer-btn[hidden] {
+    display: none;
 }
 
 .composer-btn svg {
@@ -1470,6 +1726,34 @@ body.filepicker-page {
 
 .composer-btn.send-btn:hover:not(:disabled) {
     color: var(--primary-light);
+}
+
+/* A filled, labelled Send button below the open options */
+.composer.options-open .composer-btn.send-btn {
+    width: auto;
+    height: 34px;
+    gap: 6px;
+    padding: 0 16px 0 12px;
+    border-radius: 17px;
+    background-color: var(--primary);
+    color: #ffffff;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.composer.options-open .composer-btn.send-btn:hover:not(:disabled) {
+    background-color: var(--primary-dark);
+    color: #ffffff;
+}
+
+.composer.options-open .composer-btn.send-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.composer.options-open .send-label {
+    display: inline;
 }
 
 .composer.options-open #composer-toggle svg {

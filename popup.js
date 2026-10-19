@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Priority & Theme chips
     priorityChips: document.getElementById('priority-chips'),
     themeChips: document.getElementById('theme-chips'),
+    sizeChips: document.getElementById('size-chips'),
 
     // Actions
     sendBtn: document.getElementById('send-btn'),
@@ -49,12 +50,21 @@ document.addEventListener('DOMContentLoaded', () => {
     serverAccessBtn: document.getElementById('server-access-btn'),
     serverAccessHint: document.getElementById('server-access-hint'),
     includeUrlCheckbox: document.getElementById('include-url-checkbox'),
+    receiveCheckbox: document.getElementById('receive-checkbox'),
+
+    // Receive hint
+    receiveHint: document.getElementById('receive-hint'),
+    receiveHintMessage: document.getElementById('receive-hint-message'),
+    receiveHintDismiss: document.getElementById('receive-hint-dismiss'),
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
     topicInputHint: document.getElementById('topic-input-hint'),
 
     // Recent Notifications
     notificationsTitle: document.getElementById('notifications-title'),
+    notificationsSection: document.getElementById('notifications-section'),
+    serverSection: document.getElementById('settings-server-title').parentElement,
+    topicsSection: document.getElementById('settings-topics-title').parentElement,
     notificationsList: document.getElementById('notifications-list'),
     topicSidebar: document.getElementById('topic-sidebar'),
 
@@ -71,8 +81,10 @@ document.addEventListener('DOMContentLoaded', () => {
     accessToken: '',
 
     theme: 'auto',
+    popupSize: 'medium',
     pageUrl: '',
-    sendAsZipEnabled: false
+    sendAsZipEnabled: false,
+    receiveEnabled: false
   };
 
   let tags = []; // State for tags
@@ -86,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let listRefreshPending = false;
   let listRefreshTimer = null;
   let receiveFilter = 'all'; // Topic shown and sent to, or 'all' (nothing to send to)
+  let receiveHintDismissed = false; // The hint about the Receive messages setting is shown only once
   let autoTitle = ''; // The tab URL last put in the Title field automatically
   let currentNotifications = []; // Currently displayed notifications for the active topic
   let attachments = [];
@@ -103,9 +116,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SEND_AS_ZIP_SETTING_KEY = 'sendAsZipEnabled';
   // Synced settings; the access token is in storage.local (NtfyAPI.getAccessToken)
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'sendAnotherEnabled', 'markdownEnabled', 'includeUrl', SEND_AS_ZIP_SETTING_KEY];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'theme', 'priority', 'lastTags', 'sendAnotherEnabled', 'markdownEnabled', 'includeUrl', 'receiveEnabled', 'popupSize', SEND_AS_ZIP_SETTING_KEY];
+  const POPUP_SIZES = ['small', 'medium', 'large'];
+  // The size is also kept in localStorage, so it applies before the first paint
+  // instead of after the asynchronous settings load
+  const POPUP_SIZE_CACHE_KEY = 'popupSize';
+
+  try {
+    applyPopupSize(localStorage.getItem(POPUP_SIZE_CACHE_KEY));
+  } catch (e) {}
   const STORED_FILES_KEY = 'storedFiles';
   const LEGACY_STORED_FILE_KEY = 'storedFile';
+
+  // The popup opens on the view it was closed on. Kept in localStorage like the size, so the
+  // settings show from the first paint; init fills them in once the config is loaded.
+  const LAST_VIEW_KEY = 'lastView';
+  let reopenSettings = false;
+  try {
+    reopenSettings = localStorage.getItem(LAST_VIEW_KEY) === 'settings';
+  } catch (e) {}
+  if (reopenSettings) {
+    setViewChrome(true);
+  }
 
   // Initialize
   init();
@@ -117,23 +149,31 @@ document.addEventListener('DOMContentLoaded', () => {
     await restoreDraftState();
     await loadStoredFiles();
     setupEventListeners();
-    await updateServerAccessUI(config.apiUrl, config.accessToken);
+    await updateServerAccessUI(config.apiUrl);
     updateUI();
     // Ensure priority UI is updated after config load
     updatePriorityUI();
     applyTheme();
+    // The synced setting wins, e.g. when changed in another browser
+    applyPopupSize(config.popupSize);
+    try {
+      localStorage.setItem(POPUP_SIZE_CACHE_KEY, config.popupSize);
+    } catch (e) {}
     // Render initial empty tags or restored ones
     renderTags();
-    // Set header title dynamically from manifest
-    const manifest = chrome.runtime.getManifest();
-    elements.headerText.textContent = manifest.name;
+    if (reopenSettings) {
+      showSettingsView();
+    } else {
+      // Set header title dynamically from manifest
+      elements.headerText.textContent = chrome.runtime.getManifest().name;
+    }
 
     applyUrlTitle();
     autoSizeMessageInput();
     // Back from the file picker: show the attached files
-    setComposerOptionsOpen(attachments.length > 0);
+    setComposerOptionsOpen(attachments.length > 0 || !config.receiveEnabled);
     await loadNotifications();
-    if (!elements.composer.hidden) {
+    if (!isSettingsView && !elements.composer.hidden) {
       elements.messageInput.focus();
     }
 
@@ -157,9 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
         accessToken: accessToken,
 
         theme: items.theme || 'auto',
+        popupSize: POPUP_SIZES.includes(items.popupSize) ? items.popupSize : 'medium',
         sendAnotherEnabled: items.sendAnotherEnabled === true,
         markdownEnabled: items.markdownEnabled === true,
         includeUrl: items.includeUrl === true,
+        receiveEnabled: items.receiveEnabled === true,
         sendAsZipEnabled: items[SEND_AS_ZIP_SETTING_KEY] === true
       };
 
@@ -167,6 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
       elements.sendAnotherCheckbox.checked = config.sendAnotherEnabled;
       elements.markdownCheckbox.checked = config.markdownEnabled;
       elements.includeUrlCheckbox.checked = config.includeUrl;
+      elements.receiveCheckbox.checked = config.receiveEnabled;
       elements.zipCheckbox.checked = config.sendAsZipEnabled;
 
       if (items.priority) {
@@ -190,7 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
       theme: config.theme,
+      popupSize: config.popupSize,
       includeUrl: elements.includeUrlCheckbox.checked,
+      receiveEnabled: elements.receiveCheckbox.checked,
       sendAsZipEnabled: config.sendAsZipEnabled
     };
 
@@ -209,7 +254,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // We don't want to full updateUI here because it might disrupt typing
       renderTopics(); // Re-render to ensure state consistency
       updateThemeChipsUI(); // Ensure UI reflects state
-      updateServerAccessUI(config.apiUrl, config.accessToken);
+      updateSizeChipsUI();
+      updateServerAccessUI(config.apiUrl);
 
     } catch (error) {
       showSettingsStatus('Failed to save settings', 'error');
@@ -232,27 +278,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Server Access
   // ==================
 
-  // ntfy answers CORS preflights with Access-Control-Allow-Headers: *, which doesn't cover
-  // Authorization, so authenticated requests need a host permission for the server.
-  function serverOriginPattern(apiUrl) {
-    try {
-      const url = new URL(apiUrl);
-      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-        return null;
-      }
-      // Match patterns have no port and match every port
-      return `${url.protocol}//${url.hostname}/*`;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  async function updateServerAccessUI(apiUrl, accessToken) {
-    const pattern = serverOriginPattern(apiUrl);
+  // Asked for only once the server's CORS headers blocked a request (NtfyAPI.checkServerAccessBlocked):
+  // most servers, ntfy itself included, let the extension through.
+  async function updateServerAccessUI(apiUrl) {
+    const pattern = NtfyAPI.serverOriginPattern(apiUrl);
     let missing = false;
-    if (pattern && NtfyAPI.buildAuthHeaderValue(accessToken, apiUrl)) {
+    if (pattern) {
       try {
-        missing = !(await chrome.permissions.contains({ origins: [pattern] }));
+        const { serverAccessBlocked } = await chrome.storage.local.get('serverAccessBlocked');
+        missing = serverAccessBlocked === pattern
+          && !(await chrome.permissions.contains({ origins: [pattern] }));
       } catch (e) {
         missing = false;
       }
@@ -262,10 +297,11 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.serverAccessBtn.style.display = missing ? '' : 'none';
     elements.serverAccessHint.style.display = missing ? '' : 'none';
     elements.settingsBtn.classList.toggle('highlight', !(config.apiUrl && config.topics.length > 0) || missing);
+    updateMissingSettings();
   }
 
   function requestServerAccess() {
-    const pattern = serverOriginPattern(elements.urlInput.value.trim());
+    const pattern = NtfyAPI.serverOriginPattern(elements.urlInput.value.trim());
     if (!pattern) {
       return;
     }
@@ -273,7 +309,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Called directly from the click: permissions.request needs a user gesture
     chrome.permissions.request({ origins: [pattern] }, (granted) => {
       showSettingsStatus(granted ? 'Server access granted' : 'Server access not granted', granted ? 'success' : 'error');
-      updateServerAccessUI(elements.urlInput.value.trim(), elements.tokenInput.value);
+      updateServerAccessUI(elements.urlInput.value.trim());
+      if (granted) {
+        chrome.runtime.sendMessage({ action: 'sync' }); // Fetch what was missed while blocked
+      }
     });
   }
 
@@ -290,6 +329,29 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('#theme-chips .chip').forEach(chip => {
       chip.classList.toggle('active', chip.dataset.theme === config.theme);
     });
+  }
+
+  function applyPopupSize(size) {
+    document.body.setAttribute('data-size', POPUP_SIZES.includes(size) ? size : 'medium');
+  }
+
+  function updateSizeChipsUI() {
+    elements.sizeChips.querySelectorAll('.chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.size === config.popupSize);
+    });
+  }
+
+  function handleSizeChange(e) {
+    const chip = e.target.closest('.chip');
+    if (!chip || !chip.dataset.size) return;
+
+    config.popupSize = chip.dataset.size;
+    applyPopupSize(config.popupSize);
+    updateSizeChipsUI();
+    try {
+      localStorage.setItem(POPUP_SIZE_CACHE_KEY, config.popupSize);
+    } catch (e) {}
+    saveConfig();
   }
 
   function handleThemeChange(e) {
@@ -724,12 +786,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupEventListeners() {
     // View switching
     elements.settingsBtn.addEventListener('click', showSettingsView);
-    elements.backBtn.addEventListener('click', showMainView);
+    elements.backBtn.addEventListener('click', leaveSettings);
 
     // Settings Auto-save
     const debouncedSave = debounce(saveConfig, 1000);
 
     elements.urlInput.addEventListener('input', () => {
+      updateMissingSettings();
       // showSettingsStatus('Saving...', 'visible');
       debouncedSave();
     });
@@ -742,6 +805,13 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.includeUrlCheckbox.addEventListener('change', () => {
       saveConfig();
     });
+
+    elements.receiveCheckbox.addEventListener('change', () => {
+      dismissReceiveHint(); // Found the setting
+      saveConfig();
+    });
+
+    elements.receiveHintDismiss.addEventListener('click', dismissReceiveHint);
 
     elements.serverAccessBtn.addEventListener('click', requestServerAccess);
 
@@ -768,10 +838,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Topics handling (badges)
     elements.newTopicInput.addEventListener('keydown', handleTopicKeydown);
+    elements.newTopicInput.addEventListener('blur', addTopicFromInput);
     elements.newTopicInput.addEventListener('input', updateTopicInputHint);
     elements.topicsContainer.addEventListener('click', handleTopicRemove);
 
     // Theme chips
+    elements.sizeChips.addEventListener('click', handleSizeChange);
+
     elements.themeChips.addEventListener('click', (e) => {
       handleThemeChange(e);
       saveConfig();
@@ -814,6 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Further send options above the message bar
     elements.composerToggle.addEventListener('click', () => {
+      if (!config.receiveEnabled) return; // Always open without receiving
       setComposerOptionsOpen(!elements.composer.classList.contains('options-open'));
     });
 
@@ -830,6 +904,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
           scheduleNotificationsRefresh();
+        }
+        if (changes.serverAccessBlocked) {
+          updateServerAccessUI(config.apiUrl);
         }
       }
     });
@@ -874,35 +951,60 @@ document.addEventListener('DOMContentLoaded', () => {
   // View Switching
   // ==================
 
+  // Shows the main view or the settings with their header, and remembers which for the next open
+  function setViewChrome(settings) {
+    elements.mainView.classList.toggle('active', !settings);
+    elements.settingsView.classList.toggle('active', settings);
+    elements.backBtn.classList.toggle('visible', settings);
+    elements.settingsBtn.style.display = settings ? 'none' : '';
+    elements.openUrlBtn.style.display = settings ? 'none' : '';
+    elements.headerText.textContent = settings ? 'Settings' : chrome.runtime.getManifest().name;
+    isSettingsView = settings;
+    try {
+      localStorage.setItem(LAST_VIEW_KEY, settings ? 'settings' : 'main');
+    } catch (e) {}
+  }
+
   function showSettingsView() {
     // Populate settings fields with current config
     elements.urlInput.value = config.apiUrl;
     elements.tokenInput.value = config.accessToken;
     renderTopics(); // Render badges
-    updateServerAccessUI(config.apiUrl, config.accessToken);
+    updateServerAccessUI(config.apiUrl);
 
     updateThemeChipsUI();
+    updateSizeChipsUI();
 
-    elements.mainView.classList.remove('active');
-    elements.settingsView.classList.add('active');
-    elements.backBtn.classList.add('visible');
-    elements.settingsBtn.style.display = 'none';
-    elements.openUrlBtn.style.display = 'none';
-    elements.headerText.textContent = 'Settings';
-    isSettingsView = true;
+    setViewChrome(true);
+
+    // During setup, start in the first setting still missing
+    updateMissingSettings();
+    if (!elements.urlInput.value.trim()) {
+      elements.urlInput.focus();
+    } else if (config.topics.length === 0) {
+      elements.newTopicInput.focus();
+    } else if (serverAccessMissing) {
+      elements.serverAccessBtn.focus();
+    }
+  }
+
+  // Marks the settings needed to send and receive while they are empty, and the server while
+  // its access token can't be used yet (same conditions as the settings button highlight)
+  function updateMissingSettings() {
+    elements.serverSection.classList.toggle('missing', !elements.urlInput.value.trim() || serverAccessMissing);
+    elements.topicsSection.classList.toggle('missing', config.topics.length === 0);
+  }
+
+  // Saves right away what is still pending (typed topic, debounced URL or token), so the main
+  // view shows the settings as entered
+  async function leaveSettings() {
+    addTopicFromInput();
+    await saveConfig();
+    showMainView();
   }
 
   function showMainView() {
-    elements.settingsView.classList.remove('active');
-    elements.mainView.classList.add('active');
-    elements.backBtn.classList.remove('visible');
-    elements.settingsBtn.style.display = '';
-    elements.openUrlBtn.style.display = '';
-
-    const manifest = chrome.runtime.getManifest();
-    elements.headerText.textContent = manifest.name;
-
-    isSettingsView = false;
+    setViewChrome(false);
 
     // Refresh UI to reflect any changes made in settings
     updateUI();
@@ -917,8 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateUI() {
     const isConfigured = config.apiUrl && config.topics.length > 0;
 
-    // Toggle disabled state on form and highlight on settings button
-    elements.mainView.classList.toggle('disabled', !isConfigured);
+    // Highlight the settings button until the extension is set up
     elements.settingsBtn.classList.toggle('highlight', !isConfigured || serverAccessMissing);
 
     // Enable/disable the open URL button based on configuration
@@ -927,15 +1028,23 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePriorityUI();
   }
 
-  // The composer sends to the selected topic, so it is there only while one is
+  // The composer sends to the selected topic, so it is there only while one is.
+  // Without receiving there are no messages to show, so its options are always open in their place.
   function updateComposer() {
     const topic = config.apiUrl && receiveFilter !== 'all' ? receiveFilter : null;
     elements.composer.hidden = !topic;
+    elements.composerToggle.hidden = !config.receiveEnabled;
     elements.notificationsTitle.textContent = topic || 'All topics';
+    const optionsOpen = elements.composer.classList.contains('options-open');
+    if (!config.receiveEnabled) {
+      if (!optionsOpen) {
+        setComposerOptionsOpen(true);
+      }
+    } else if (!topic && optionsOpen) {
+      setComposerOptionsOpen(false);
+    }
     if (topic) {
       autoSizeMessageInput();
-    } else if (elements.composer.classList.contains('options-open')) {
-      setComposerOptionsOpen(false);
     }
   }
 
@@ -1192,23 +1301,29 @@ document.addEventListener('DOMContentLoaded', () => {
       badge.appendChild(removeSpan);
       elements.topicsContainer.insertBefore(badge, elements.newTopicInput);
     });
+    elements.newTopicInput.placeholder = config.topics.length ? '' : 'Type a topic name, e.g. alerts';
+    updateMissingSettings();
+  }
+
+  // Adds the typed topic, if any. Also on leaving the field, so a topic typed without Enter isn't lost.
+  function addTopicFromInput() {
+    const value = elements.newTopicInput.value.trim();
+    if (!value) return;
+
+    // Add topic if not exists
+    if (!config.topics.includes(value)) {
+      config.topics.push(value);
+      renderTopics();
+      saveConfig();
+    }
+    elements.newTopicInput.value = '';
+    updateTopicInputHint(); // Hide hint after clearing
   }
 
   function handleTopicKeydown(e) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const value = elements.newTopicInput.value.trim();
-
-      if (value) {
-        // Add topic if not exists
-        if (!config.topics.includes(value)) {
-          config.topics.push(value);
-          renderTopics();
-          saveConfig();
-        }
-        elements.newTopicInput.value = '';
-        updateTopicInputHint(); // Hide hint after clearing
-      }
+      addTopicFromInput();
     } else if (e.key === 'Backspace' && !elements.newTopicInput.value) {
       // Remove last topic if input is empty
       if (config.topics.length > 0) {
@@ -1412,7 +1527,10 @@ document.addEventListener('DOMContentLoaded', () => {
         await finishSuccessfulSend(0);
       }
     } catch (error) {
-      showStatus(`Error: ${error.message}`, 'error');
+      await updateServerAccessUI(config.apiUrl);
+      showStatus(serverAccessMissing
+        ? 'Error: The server blocked the request. Allow access to it in the settings.'
+        : `Error: ${error.message}`, 'error');
     } finally {
       isSending = false;
       elements.sendBtn.disabled = false;
@@ -1575,10 +1693,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (receiveFilter !== 'all' && !config.topics.includes(receiveFilter)) {
       receiveFilter = 'all';
     }
+    // Without receiving, All topics isn't offered: there is nothing to list, and nothing to send to
+    if (!config.receiveEnabled && receiveFilter === 'all' && config.topics.length > 0) {
+      receiveFilter = config.topics[0];
+    }
     updateComposer();
+    updateReceiveHint();
 
     if (!config.apiUrl || config.topics.length === 0) {
-      elements.notificationsList.innerHTML = '<div class="notifications-empty">Configure server and topics to view notifications</div>';
+      renderSetupHint();
+      return;
+    }
+    elements.notificationsSection.classList.remove('setup');
+
+    if (!config.receiveEnabled) {
+      currentNotifications = [];
+      renderTopicSidebar([]);
       return;
     }
 
@@ -1718,14 +1848,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Topic list: All topics, then each configured topic, with unread counts
+  // Points to the Receive messages setting, once the extension is set up, until dismissed
+  function updateReceiveHint() {
+    // From the first start on, so the choice is known while setting up
+    const show = !receiveHintDismissed;
+    elements.receiveHint.hidden = !show;
+    if (show) {
+      elements.receiveHintMessage.textContent = config.receiveEnabled
+        ? 'Only want to send? Turn off Receive messages in the settings.'
+        : 'The extension only sends for now. To see your topics\' messages here and get desktop notifications, turn on Receive messages in the settings.';
+    }
+  }
+
+  function dismissReceiveHint() {
+    if (receiveHintDismissed) return;
+    receiveHintDismissed = true;
+    elements.receiveHint.hidden = true;
+    saveToStorageLocal({ receiveHintDismissed: true }).catch(() => {});
+  }
+
+  // First start: nothing to list until a server and at least one topic are set
+  function renderSetupHint() {
+    elements.topicSidebar.replaceChildren();
+    elements.topicSidebar.style.display = 'none';
+    elements.notificationsSection.classList.add('setup');
+
+    const hint = document.createElement('div');
+    hint.className = 'notifications-empty setup-hint';
+
+    const title = document.createElement('div');
+    title.className = 'setup-hint-title';
+    title.textContent = config.apiUrl ? 'No topic configured' : 'No server configured';
+
+    const text = document.createElement('div');
+    text.textContent = config.apiUrl
+      ? 'Add a topic in the settings to get started.'
+      : `Enter your ntfy server${config.topics.length ? '' : ' and a topic'} in the settings to get started.`;
+
+    hint.append(title, text);
+    elements.notificationsList.replaceChildren(hint);
+  }
+
+  // Topic list: All topics (when receiving), then each configured topic, with unread counts
   function renderTopicSidebar(notifications) {
     const unreadCount = topic => notifications
       .filter(notification => topic === 'all' || notification.topic === topic)
       .filter(notification => !readMessageIds.includes(notification.id))
       .length;
 
-    const entries = ['all', ...config.topics];
+    const entries = config.receiveEnabled ? ['all', ...config.topics] : config.topics;
+    elements.topicSidebar.style.display = '';
     elements.topicSidebar.replaceChildren(...entries.map(topic => {
       const btn = document.createElement('button');
       btn.className = 'topic-filter-btn';
@@ -1942,10 +2114,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadLocalState() {
     try {
-      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds', 'receiveTopicFilter']);
+      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds', 'receiveTopicFilter', 'receiveHintDismissed']);
       readMessageIds = result.readMessageIds || [];
       deletedMessageIds = result.deletedMessageIds || [];
       receiveFilter = result.receiveTopicFilter || 'all';
+      receiveHintDismissed = result.receiveHintDismissed === true;
     } catch (error) {
       console.error('Error loading local state:', error);
     }

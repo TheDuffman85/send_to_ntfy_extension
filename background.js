@@ -57,6 +57,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
             updateContextMenu();
             initWebSocket();
         }
+        if (changes.receiveEnabled) {
+            initWebSocket();
+            updateUnreadBadge();
+        }
     }
     if (area === 'local') {
         if (changes.accessToken) {
@@ -344,6 +348,15 @@ async function initWebSocket() {
     if (!config.apiUrl || config.topics.length === 0) {
         console.log('ntfy is not configured, skipping WebSocket connection.');
         closeWebSocket();
+        return;
+    }
+
+    if (!config.receiveEnabled) {
+        console.log('Receiving is disabled, skipping WebSocket connection.');
+        closeWebSocket();
+        // Turned back on, each topic starts again with a silent sync instead of notifying the
+        // whole backlog of the time it was off
+        await serialized(() => chrome.storage.local.remove('topicSyncState'));
         return;
     }
 
@@ -703,7 +716,7 @@ function syncMissedMessages() {
 
 async function runSync() {
     const config = await NtfyAPI.getConfig();
-    if (!config.apiUrl || config.topics.length === 0) return;
+    if (!config.apiUrl || config.topics.length === 0 || !config.receiveEnabled) return;
     if (await rateLimitRemaining() > 0) return;
 
     const { topicSyncState = {} } = await chrome.storage.local.get(['topicSyncState']);
@@ -774,6 +787,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 async function updateUnreadBadge() {
+    const config = await NtfyAPI.getConfig();
+    if (!config.receiveEnabled) {
+        chrome.action.setBadgeText({ text: '' });
+        return;
+    }
     chrome.storage.local.get(['receivedNotifications', 'readMessageIds', 'deletedMessageIds'], (result) => {
         const history = result.receivedNotifications || [];
         const readIds = result.readMessageIds || [];

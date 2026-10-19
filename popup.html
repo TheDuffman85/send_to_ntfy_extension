@@ -7,9 +7,11 @@
   <link rel="stylesheet" href="styles.css">
   <style>
     /* Popup-specific layout */
-    /* Wide enough for the topic list next to the messages */
+    /* Wide enough for the topic list next to the messages. The popup size setting sets the width
+       and the zoom of text and spacing (styles.css); the width is in the zoomed page's pixels. */
     body {
-      width: 600px;
+      zoom: var(--ui-scale);
+      width: calc(var(--popup-width) / var(--ui-scale));
     }
 
     .header {
@@ -54,8 +56,19 @@
 
   <!-- Main View: topic list, the selected topic's messages, and the composer below them -->
   <div class="view active" id="main-view">
+    <!-- Shown once, until dismissed: where receiving is switched on and off -->
+    <div class="receive-hint" id="receive-hint" hidden>
+      <span class="receive-hint-text">
+        <span id="receive-hint-message"></span>
+      </span>
+      <button class="receive-hint-dismiss" id="receive-hint-dismiss" title="Dismiss" aria-label="Dismiss">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+        </svg>
+      </button>
+    </div>
     <div class="main-content receive-layout">
-      <!-- Topic list: All topics, then each configured topic -->
+      <!-- Topic list: All topics (when receiving), then each configured topic -->
       <nav class="topic-sidebar" id="topic-sidebar" aria-label="Topics"></nav>
       <!-- Notifications Section -->
       <div class="notifications-section" id="notifications-section">
@@ -73,7 +86,7 @@
         <!-- Status Message -->
         <div class="status" id="status"></div>
 
-        <!-- Composer: sends to the selected topic, hidden on All topics -->
+        <!-- Composer: sends to the selected topic, hidden on All topics; always open when not receiving -->
         <div class="composer" id="composer" hidden>
           <!-- Further send options, opened with the arrow button -->
           <div class="composer-options" id="composer-options">
@@ -123,23 +136,19 @@
                 </button>
               </div>
               <div class="file-preview" id="file-preview" aria-live="polite"></div>
-              <label class="zip-toggle" id="zip-toggle">
-                <span class="zip-toggle-copy">
-                  <span class="zip-toggle-title">Send files as one ZIP</span>
-                  <span class="zip-toggle-hint">One ntfy message containing every attached file.</span>
+              <label class="switch-row zip-toggle" id="zip-toggle">
+                <span class="switch-copy">
+                  <span class="switch-title">Send files as one ZIP</span>
+                  <span class="switch-hint">One ntfy message containing every attached file.</span>
                 </span>
                 <input type="checkbox" id="zip-checkbox" aria-label="Send files as one ZIP">
-                <span class="zip-switch" aria-hidden="true"><span></span></span>
+                <span class="switch" aria-hidden="true"><span></span></span>
               </label>
-            </div>
-
-            <div class="composer-checkbox">
-              <input type="checkbox" id="send-another-checkbox">
-              <label for="send-another-checkbox">Send another (keep the popup open after sending)</label>
             </div>
           </div>
 
-          <!-- Message bar, like the ntfy web app's -->
+          <!-- Message bar, like the ntfy web app's. With the options open it is their footer:
+               the arrow to close them, Send another, and a labelled Send button. -->
           <div class="composer-bar">
             <button class="composer-btn" id="composer-toggle" title="More options" aria-expanded="false"
               aria-controls="composer-options">
@@ -149,10 +158,15 @@
             </button>
             <textarea class="composer-input" id="message-input" rows="1" placeholder="Type a message here"
               aria-label="Message"></textarea>
+            <label class="send-another" title="Keep the popup open after sending">
+              <input type="checkbox" id="send-another-checkbox">
+              <span>Send another</span>
+            </label>
             <button class="composer-btn send-btn" id="send-btn" title="Send">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
                 <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
               </svg>
+              <span class="send-label">Send</span>
             </button>
           </div>
         </div>
@@ -160,51 +174,85 @@
     </div>
   </div>
 
-  <!-- Settings View -->
+  <!-- Settings View: grouped in sections, saved automatically -->
   <div class="view" id="settings-view">
-    <div class="main-content">
+    <div class="main-content settings-content">
+      <section class="settings-section" aria-labelledby="settings-server-title">
+        <h2 class="settings-section-title" id="settings-server-title">Server</h2>
+        <div class="settings-row">
+          <div class="form-group">
+            <label class="form-label" for="url-input">Server URL</label>
+            <input type="text" class="form-input" id="url-input" placeholder="https://ntfy.sh">
+            <p class="form-hint">Base URL of your ntfy server</p>
+            <button class="chip" id="server-access-btn" style="display: none;">🔓 Allow access to this server</button>
+            <p class="form-hint" id="server-access-hint" style="display: none;">Your server blocked a request from the extension. Allowing access to it lets the extension send and receive.</p>
+          </div>
 
+          <div class="form-group">
+            <label class="form-label" for="token-input">Access token (optional)</label>
+            <input type="password" class="form-input" id="token-input" placeholder="tk_...">
+            <p class="form-hint">For private topics or authenticated servers</p>
+          </div>
+        </div>
+      </section>
 
-      <div class="form-group">
-        <label class="form-label" for="url-input">Server URL</label>
-        <input type="text" class="form-input" id="url-input" placeholder="https://ntfy.sh">
-        <p class="form-hint">Base URL of your ntfy server</p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="token-input">Access Token (optional)</label>
-        <input type="password" class="form-input" id="token-input" placeholder="tk_...">
-        <p class="form-hint">For private topics or authenticated servers</p>
-        <button class="chip" id="server-access-btn" style="display: none;">🔓 Allow access to this server</button>
-        <p class="form-hint" id="server-access-hint" style="display: none;">Needed to send and receive with authentication</p>
-      </div>
-
-      <div class="form-group">
-        <div class="form-label">Topics</div>
+      <section class="settings-section" aria-labelledby="settings-topics-title">
+        <h2 class="settings-section-title" id="settings-topics-title">Topics</h2>
         <div class="topics-container" id="topics-container">
-          <input type="text" class="topic-input-field" id="new-topic-input">
+          <input type="text" class="topic-input-field" id="new-topic-input" aria-label="Add topic">
           <span class="topic-input-hint" id="topic-input-hint">Press enter to add topic</span>
         </div>
-      </div>
+        <p class="form-hint">The topics you send to and receive from. Drag them to change the order.</p>
+      </section>
 
-      <div class="form-group">
-        <div class="checkbox-group">
-          <input type="checkbox" id="include-url-checkbox">
-          <label for="include-url-checkbox">Include current tab's URL</label>
+      <section class="settings-section" aria-labelledby="settings-receiving-title">
+        <h2 class="settings-section-title" id="settings-receiving-title">Receiving</h2>
+        <label class="switch-row">
+          <span class="switch-copy">
+            <span class="switch-title">Receive messages</span>
+            <span class="switch-hint">Lists the messages of your topics and shows desktop notifications, over a
+              live connection to the server.</span>
+          </span>
+          <input type="checkbox" id="receive-checkbox" aria-label="Receive messages">
+          <span class="switch" aria-hidden="true"><span></span></span>
+        </label>
+      </section>
+
+      <section class="settings-section" aria-labelledby="settings-sending-title">
+        <h2 class="settings-section-title" id="settings-sending-title">Sending</h2>
+        <label class="switch-row">
+          <span class="switch-copy">
+            <span class="switch-title">Include current tab's URL</span>
+            <span class="switch-hint">Puts the active tab's URL in the message title.</span>
+          </span>
+          <input type="checkbox" id="include-url-checkbox" aria-label="Include current tab's URL">
+          <span class="switch" aria-hidden="true"><span></span></span>
+        </label>
+      </section>
+
+      <section class="settings-section" aria-labelledby="settings-appearance-title">
+        <h2 class="settings-section-title" id="settings-appearance-title">Appearance</h2>
+        <div class="settings-row">
+          <div class="form-group">
+            <div class="form-label">Theme</div>
+            <div class="chips" id="theme-chips">
+              <button class="chip" data-theme="light">☀️ Light</button>
+              <button class="chip" data-theme="dark">🌙 Dark</button>
+              <button class="chip active" data-theme="auto">🔄 Auto</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">Popup size</div>
+            <div class="chips" id="size-chips">
+              <button class="chip" data-size="small">Small</button>
+              <button class="chip active" data-size="medium">Medium</button>
+              <button class="chip" data-size="large">Large</button>
+            </div>
+          </div>
         </div>
-        <p class="form-hint">Put the active tab's URL in the title</p>
-      </div>
+      </section>
 
-      <div class="form-group">
-        <div class="form-label">Appearance</div>
-        <div class="chips" id="theme-chips">
-          <button class="chip" data-theme="light">☀️ Light</button>
-          <button class="chip" data-theme="dark">🌙 Dark</button>
-          <button class="chip active" data-theme="auto">🔄 Auto</button>
-        </div>
-      </div>
-
-      <!-- Save button removed for auto-save -->
       <div class="status" id="settings-status"></div>
     </div>
   </div>
