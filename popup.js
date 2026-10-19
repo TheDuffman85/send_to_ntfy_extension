@@ -1275,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
       badge.appendChild(removeSpan);
       elements.tagsContainer.insertBefore(badge, elements.newTagInput);
     });
+    elements.newTagInput.placeholder = tags.length ? '' : 'Type a tag or emoji name, e.g. warning';
     positionEmojiPicker(); // The field may have got another line
   }
 
@@ -1695,6 +1696,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Close the popup unless "Send another" is checked (the extension's tab stays open).
     if (!elements.sendAnotherCheckbox.checked) {
+      // Tags only carry over to the next message while "Send another" is checked
+      tags = [];
+      renderTags();
+      await saveToStorage({ lastTags: [] }).catch(error => console.error('Error clearing tags:', error));
       setTimeout(() => window.close(), 100);
     } else {
       const notificationText = successMessage || (attachmentCount > 1
