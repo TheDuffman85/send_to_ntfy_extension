@@ -1186,6 +1186,20 @@ body.filepicker-page {
     opacity: 0.5; /* Fade priority indicator too */
 }
 
+.unread-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background-color: var(--primary);
+    vertical-align: 1px;
+}
+
+.notification-item.read .unread-dot {
+    display: none;
+}
+
 .notification-footer {
     display: flex;
     justify-content: space-between;

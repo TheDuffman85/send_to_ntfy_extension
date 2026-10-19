@@ -1925,7 +1925,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const time = document.createElement('span');
         time.className = 'notification-time';
-        time.textContent = `${notification.topic} · ${formatTime(notification.time)}`;
+        // Unread messages get a green dot before the time, like in the ntfy web app
+        const unreadDot = document.createElement('span');
+        unreadDot.className = 'unread-dot';
+        unreadDot.title = 'Unread';
+        time.append(unreadDot, `${notification.topic} · ${formatTime(notification.time)}`);
         header.appendChild(time);
 
         item.appendChild(header);
