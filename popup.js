@@ -69,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Recent Notifications
     notificationsTitle: document.getElementById('notifications-title'),
+    notifyToggle: document.getElementById('notify-toggle'),
+    notifyCheckbox: document.getElementById('notify-checkbox'),
     notificationsSection: document.getElementById('notifications-section'),
     serverSection: document.getElementById('settings-server-title').parentElement,
     topicsSection: document.getElementById('settings-topics-title').parentElement,
@@ -109,6 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let receiveFilter = 'all'; // Topic shown and sent to, or 'all' (nothing to send to)
   let receiveHintDismissed = false; // The hint about the Receive messages setting is shown only once
   let currentNotifications = []; // Currently displayed notifications for the active topic
+  let notificationsMuted = false; // Notifications off for all topics
+  let mutedTopics = []; // Topics with notifications off
   let attachments = [];
 
   // Drag and drop state
@@ -925,6 +929,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 
+    elements.notifyCheckbox.addEventListener('change', handleNotifyToggle);
+
     // Bulk actions
     elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
     elements.deleteAllBtn.addEventListener('click', handleDeleteAll);
@@ -935,7 +941,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (changes[STORED_FILES_KEY] || changes[LEGACY_STORED_FILE_KEY]) {
           loadStoredFiles();
         }
-        if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
+        if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds
+          || changes.notificationsMuted || changes.mutedTopics) {
           scheduleNotificationsRefresh();
         }
         if (changes.serverAccessBlocked) {
@@ -1857,6 +1864,7 @@ document.addEventListener('DOMContentLoaded', () => {
       receiveFilter = config.topics[0];
     }
     updateComposer();
+    updateNotifyToggle();
     updateReceiveHint();
 
     if (!config.apiUrl || config.topics.length === 0) {
@@ -2073,6 +2081,13 @@ document.addEventListener('DOMContentLoaded', () => {
       name.textContent = topic === 'all' ? 'All topics' : topic;
       btn.appendChild(name);
 
+      if (config.receiveEnabled && (notificationsMuted || mutedTopics.includes(topic))) {
+        // The header switch's crossed-out bell
+        const icon = elements.notifyToggle.querySelector('.notify-icon-off').cloneNode(true);
+        icon.setAttribute('class', 'topic-muted-icon');
+        btn.appendChild(icon);
+      }
+
       const count = unreadCount(topic);
       if (count > 0) {
         const badge = document.createElement('span');
@@ -2090,6 +2105,45 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       return btn;
     }));
+  }
+
+  // Switch in the topic header for notifications: of all topics on All topics, otherwise of the
+  // selected topic. Off, messages show no desktop notification and are marked as read (background).
+  // Only while receiving, as there are none otherwise.
+  function updateNotifyToggle() {
+    const configured = config.apiUrl && config.topics.length > 0;
+    elements.notifyToggle.hidden = !config.receiveEnabled || !configured;
+    const checkbox = elements.notifyCheckbox;
+    let title;
+    if (receiveFilter === 'all') {
+      checkbox.checked = !notificationsMuted;
+      checkbox.disabled = false;
+      title = notificationsMuted ? 'Notifications are off for all topics' : 'Notifications for all topics';
+    } else {
+      checkbox.checked = !notificationsMuted && !mutedTopics.includes(receiveFilter);
+      checkbox.disabled = notificationsMuted;
+      title = notificationsMuted
+        ? 'Notifications are off for all topics. Switch them on in All topics.'
+        : `Notifications for ${receiveFilter}`;
+    }
+    elements.notifyToggle.title = title;
+  }
+
+  // The storage change refreshes the topic list and the switch
+  async function handleNotifyToggle() {
+    const on = elements.notifyCheckbox.checked;
+    if (receiveFilter === 'all') {
+      notificationsMuted = !on;
+    } else {
+      mutedTopics = on
+        ? mutedTopics.filter(topic => topic !== receiveFilter)
+        : [...mutedTopics, receiveFilter];
+    }
+    try {
+      await saveToStorageLocal({ notificationsMuted, mutedTopics });
+    } catch (error) {
+      console.error('Error saving the notification setting:', error);
+    }
   }
 
   // Text and link nodes for a message: http(s) URLs become links that open in a new tab
@@ -2246,11 +2300,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadLocalState() {
     try {
-      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds', 'receiveTopicFilter', 'receiveHintDismissed']);
+      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds', 'receiveTopicFilter', 'receiveHintDismissed', 'notificationsMuted', 'mutedTopics']);
       readMessageIds = result.readMessageIds || [];
       deletedMessageIds = result.deletedMessageIds || [];
       receiveFilter = result.receiveTopicFilter || 'all';
       receiveHintDismissed = result.receiveHintDismissed === true;
+      notificationsMuted = result.notificationsMuted === true;
+      mutedTopics = result.mutedTopics || [];
     } catch (error) {
       console.error('Error loading local state:', error);
     }

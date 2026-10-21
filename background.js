@@ -100,6 +100,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
         if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
             updateUnreadBadge();
         }
+        if (changes.receivedNotifications || changes.notificationsMuted || changes.mutedTopics) {
+            markMutedMessagesRead();
+        }
     }
 });
 
@@ -767,8 +770,35 @@ async function rateLimitRemaining() {
 
 async function handleIncomingMessage(notification) {
     console.log('Received notification:', notification.id, notification.title);
-    if (await processMessage(notification)) {
+    if (await processMessage(notification) && !(await mutedTopicFilter())(notification.topic)) {
         showDesktopNotification(notification);
+    }
+}
+
+// Notifications can be switched off for all topics (notificationsMuted) or for single ones
+// (mutedTopics), in the popup's topic header. The messages are still received and listed, but show
+// no desktop notification and are marked as read. Resolves to a function that tells whether a topic is muted.
+async function mutedTopicFilter() {
+    const { notificationsMuted = false, mutedTopics = [] } =
+        await chrome.storage.local.get(['notificationsMuted', 'mutedTopics']);
+    return topic => notificationsMuted || mutedTopics.includes(topic);
+}
+
+// Marks the unread messages of muted topics as read: new ones as they arrive, and those already
+// there when a topic is muted
+async function markMutedMessagesRead() {
+    try {
+        const isMuted = await mutedTopicFilter();
+        const { receivedNotifications = [], readMessageIds = [] } =
+            await chrome.storage.local.get(['receivedNotifications', 'readMessageIds']);
+        const ids = receivedNotifications
+            .filter(notification => isMuted(notification.topic) && !readMessageIds.includes(notification.id))
+            .map(notification => notification.id);
+        if (ids.length > 0) {
+            await chrome.storage.local.set({ readMessageIds: NtfyAPI.appendIds(readMessageIds, ids) });
+        }
+    } catch (error) {
+        console.error('Failed to mark the messages of muted topics as read:', error.message);
     }
 }
 
@@ -1103,16 +1133,17 @@ async function runSync() {
         }
     }
 
-    showCatchUpNotifications(toNotify);
+    const isMuted = await mutedTopicFilter();
+    showCatchUpNotifications(toNotify.filter(notification => !isMuted(notification.topic)));
     await forgetRemovedTopics(config.topics);
 }
 
 // Forget removed topics: their messages leave the history, and adding one back starts with a
-// silent sync again
+// silent sync again, with notifications on
 function forgetRemovedTopics(topics) {
     return serialized(async () => {
-        const { topicSyncState = {}, receivedNotifications = [] } =
-            await chrome.storage.local.get(['topicSyncState', 'receivedNotifications']);
+        const { topicSyncState = {}, receivedNotifications = [], mutedTopics = [] } =
+            await chrome.storage.local.get(['topicSyncState', 'receivedNotifications', 'mutedTopics']);
         const update = {};
 
         const stale = Object.keys(topicSyncState).filter(topic => !topics.includes(topic));
@@ -1123,6 +1154,10 @@ function forgetRemovedTopics(topics) {
         const history = receivedNotifications.filter(notification => topics.includes(notification.topic));
         if (history.length !== receivedNotifications.length) {
             update.receivedNotifications = history;
+        }
+        const stillMuted = mutedTopics.filter(topic => topics.includes(topic));
+        if (stillMuted.length !== mutedTopics.length) {
+            update.mutedTopics = stillMuted;
         }
 
         if (Object.keys(update).length > 0) {

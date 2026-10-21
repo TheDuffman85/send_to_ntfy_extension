@@ -926,6 +926,42 @@ body.filepicker-page {
     color: var(--text-primary);
 }
 
+/* Topic name with the switch for its notifications */
+.section-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.notifications-section .section-heading .section-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notify-toggle {
+    flex: none;
+    gap: 4px;
+    color: var(--text-secondary);
+}
+
+.notify-toggle[hidden],
+.notify-toggle:has(input:checked) .notify-icon-off,
+.notify-toggle:has(input:not(:checked)) .notify-icon-on {
+    display: none;
+}
+
+.notify-icon {
+    fill: currentColor;
+}
+
+/* Off for all topics: a topic's switch can't turn them on */
+.notify-toggle:has(input:disabled) {
+    cursor: default;
+    opacity: 0.5;
+}
+
 .notifications-list {
     max-height: 250px;
     overflow-y: auto;
@@ -1530,6 +1566,16 @@ body.filepicker-page {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Notifications switched off; an unread count stays on the right */
+.topic-muted-icon {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    margin-right: auto;
+    fill: currentColor;
+    opacity: 0.7;
 }
 
 .topic-unread-count {

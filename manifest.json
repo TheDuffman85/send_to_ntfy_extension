@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "116",
   "name": "Send to ntfy",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Send and receive ntfy notifications: file attachments, priority, tags, and a list of received messages",
   "permissions": [
     "activeTab",
